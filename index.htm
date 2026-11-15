@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestion Globale - Tutelle Méricienne</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col justify-between">
+
+    <!-- HEADER GLOBAL -->
+    <header class="bg-red-900 text-white shadow-md p-4 flex justify-between items-center">
+        <h1 class="text-xl font-bold">Tutelle Méricienne — Application de Gestion V 7.3</h1>
+        <div id="user-session-info" class="text-sm hidden">
+            Connecté en tant que <span id="lbl-current-user" class="font-semibold underline"></span> 
+            (<span id="lbl-current-role" class="italic"></span>)
+            <button onclick="logout()" class="ml-4 bg-red-800 px-3 py-1 rounded text-xs hover:bg-red-700">Déconnexion</button>
+        </div>
+    </header>
+
+    <!-- CONTAINER PRINCIPAL -->
+    <main class="container mx-auto p-4 flex-grow max-w-[1400px]">
+
+        <!-- ÉCRAN D'ATTENTE PENDANT LA VÉRIFICATION DE SESSION -->
+        <div id="view-loading" class="app-view max-w-md mx-auto bg-white p-8 rounded-xl shadow-lg mt-16 text-center">
+            <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-red-900 mx-auto mb-4"></div>
+            <h2 class="text-lg font-semibold text-red-900">Vérification de votre session en cours...</h2>
+            <p class="text-xs text-slate-500 mt-2">Vous allez être redirigé automatiquement vers l'espace de gestion.</p>
+        </div>
+
+        <!-- ÉCRAN 2 : MENU PRINCIPAL -->
+        <div id="view-main-menu" class="app-view hidden max-w-4xl mx-auto bg-white p-8 rounded-xl shadow-lg mt-10">
+            <h2 class="text-2xl font-semibold mb-6 text-red-900 text-center border-b pb-3">Menu Principal</h2>
+            <p class="text-slate-600 mb-6 text-center">Sélectionnez un domaine de gestion :</p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button onclick="openSubMenu('saisie-consultation')" class="bg-red-900 text-white p-4 rounded-xl shadow hover:bg-red-800 transition text-left flex flex-col justify-between">
+                    <span class="font-bold text-lg">Saisie / Modification / Consultation</span>
+                    <span class="text-xs text-red-200 mt-2">Personnes, Établissements, Unités Pédagogiques, OGEC, APEL, Diocèses</span>
+                </button>
+                <button onclick="openSubMenu('editions')" class="bg-slate-700 text-white p-4 rounded-xl shadow hover:bg-slate-600 transition text-left flex flex-col justify-between">
+                    <span class="font-bold text-lg">Éditions &amp; États Économiques</span>
+                    <span class="text-xs text-slate-300 mt-2">Annuaires et Synthèse Économique Triennale (T_ECO + T_EFFECTIF)</span>
+                </button>
+                <button onclick="openSubMenu('courriels-enquetes')" id="btn-menu-enquetes" class="bg-slate-700 text-white p-4 rounded-xl shadow hover:bg-slate-600 transition text-left flex flex-col justify-between">
+                    <span class="font-bold text-lg">Campagnes d'Enquêtes</span>
+                    <span class="text-xs text-slate-300 mt-2">Économiques, Effectifs élèves et personnel</span>
+                </button>
+                <button onclick="openCourrielsCollectifs()" id="btn-menu-collectifs" class="bg-slate-700 text-white p-4 rounded-xl shadow hover:bg-slate-600 transition text-left flex flex-col justify-between">
+                    <span class="font-bold text-lg">Courriels Collectifs</span>
+                    <span class="text-xs text-slate-300 mt-2">Envoi de messages par type de personne</span>
+                </button>
+                <button onclick="openSubMenu('carriere-ce')" id="btn-menu-carriere" class="bg-slate-700 text-white p-4 rounded-xl shadow hover:bg-slate-600 transition text-left flex flex-col justify-between">
+                    <span class="font-bold text-lg">Carrière CE</span>
+                    <span class="text-xs text-slate-300 mt-2">Contrats de travail et avenants financiers</span>
+                </button>
+                <button onclick="openSubMenu('facturation')" id="btn-menu-facturation" class="bg-red-900 text-white p-4 rounded-xl shadow hover:bg-red-800 transition text-left flex flex-col justify-between">
+                    <span class="font-bold text-lg">Facturation</span>
+                    <span class="text-xs text-red-200 mt-2">Gestion des grilles tarifaires et édition des factures de cotisations (UUR / USAM)</span>
+                </button>
+                <button onclick="openParametresModule()" id="btn-menu-parametres" class="bg-slate-700 text-white p-4 rounded-xl shadow hover:bg-slate-600 transition text-left flex flex-col justify-between md:col-span-2">
+                    <span class="font-bold text-lg">Paramètres</span>
+                    <span class="text-xs text-slate-300 mt-2">Gestion des utilisateurs et des tables de référence</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- SOUS-MENU 1 : SAISIE / MODIFICATION / CONSULTATION -->
+        <div id="view-submenu-saisie" class="app-view hidden max-w-3xl mx-auto bg-white p-8 rounded-xl shadow-lg mt-10">
+            <h2 class="text-2xl font-semibold mb-6 text-red-900 border-b pb-3">Saisie / Modification / Consultation</h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <button onclick="selectEntityModule('personnes')" class="p-4 border rounded-xl hover:bg-red-50 hover:border-red-900 transition text-left"><h3 class="font-bold text-red-900">Personnes</h3><p class="text-xs text-slate-500 mt-1">Table T_PERSONNES</p></button>
+                <button onclick="selectEntityModule('etablissements')" class="p-4 border rounded-xl hover:bg-red-50 hover:border-red-900 transition text-left"><h3 class="font-bold text-red-900">Établissements</h3><p class="text-xs text-slate-500 mt-1">Table T_ETABLISSEMENT</p></button>
+                <button onclick="selectEntityModule('unites_pedagogiques')" class="p-4 border rounded-xl hover:bg-red-50 hover:border-red-900 transition text-left"><h3 class="font-bold text-red-900">Unités Pédagogiques</h3><p class="text-xs text-slate-500 mt-1">Table T_UNITE_PEDAGOGIQUE</p></button>
+                <button onclick="selectEntityModule('ogec')" class="p-4 border rounded-xl hover:bg-red-50 hover:border-red-900 transition text-left"><h3 class="font-bold text-red-900">OGEC</h3><p class="text-xs text-slate-500 mt-1">Table T_OGEC</p></button>
+                <button onclick="selectEntityModule('apel')" class="p-4 border rounded-xl hover:bg-red-50 hover:border-red-900 transition text-left"><h3 class="font-bold text-red-900">APEL</h3><p class="text-xs text-slate-500 mt-1">Table T_APEL</p></button>
+                <button onclick="selectEntityModule('dioceses')" class="p-4 border rounded-xl hover:bg-red-50 hover:border-red-900 transition text-left"><h3 class="font-bold text-red-900">Diocèses</h3><p class="text-xs text-slate-500 mt-1">Table T_DIOCESE</p></button>
+            </div>
+            <div class="mt-6"><button onclick="showView('view-main-menu')" class="bg-slate-300 text-slate-700 px-6 py-2 rounded-lg">Retour au Menu Principal</button></div>
+        </div>
+
+        <!-- ÉCRAN : CHOIX DU MODE -->
+        <div id="view-choice" class="app-view hidden max-w-lg mx-auto bg-white p-8 rounded-xl shadow-lg mt-10 text-center">
+            <h2 id="choice-main-title" class="text-2xl font-semibold mb-6 text-red-900">Gestion</h2>
+            <p class="text-slate-600 mb-6">Que souhaitez-vous faire ?</p>
+            <div class="flex flex-col gap-4 justify-center">
+                <button onclick="selectMode('consult')" class="bg-sky-700 text-white px-6 py-3 rounded-lg hover:bg-sky-600 transition">Consulter une fiche</button>
+                <button id="btn-mode-create" onclick="selectMode('create')" class="bg-emerald-700 text-white px-6 py-3 rounded-lg hover:bg-emerald-600 transition">Créer une nouvelle fiche</button>
+                <button id="btn-mode-modify" onclick="selectMode('modify')" class="bg-amber-700 text-white px-6 py-3 rounded-lg hover:bg-amber-600 transition">Modifier une fiche existante</button>
+            </div>
+            <div class="mt-6"><button onclick="showView('view-submenu-saisie')" class="bg-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm">Retour aux sous-menus</button></div>
+        </div>
+
+        <!-- ÉCRAN : SÉLECTION DE LA FICHE -->
+        <div id="view-search" class="app-view hidden max-w-md mx-auto bg-white p-8 rounded-xl shadow-lg mt-10">
+            <h2 id="search-title" class="text-2xl font-semibold mb-4 text-red-900">Rechercher</h2>
+            <p class="text-sm text-slate-500 mb-4">Saisissez les premières lettres :</p>
+            <input type="text" id="search-input" oninput="filterSearchList()" placeholder="Ex: ..." class="w-full p-2 border rounded-lg mb-4">
+            <select id="search-select" size="6" class="w-full p-2 border rounded-lg mb-4"></select>
+            <div class="flex justify-between">
+                <button onclick="showView('view-choice')" class="bg-slate-300 text-slate-700 px-4 py-2 rounded-lg">Retour</button>
+                <button id="search-action-btn" onclick="loadSelectedRecord()" class="bg-red-900 text-white px-4 py-2 rounded-lg">Valider</button>
+            </div>
+        </div>
+
+        <!-- FORMULAIRE 1 : PERSONNES -->
+        <div id="view-form-personnes" class="app-view hidden bg-white p-8 rounded-xl shadow-lg mt-6">
+            <h2 class="text-2xl font-semibold mb-6 text-red-900 border-b pb-3">Fiche Personne</h2>
+            <form id="form-personnes-data" onsubmit="saveRecord(event, 'personnes')" class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div class="space-y-4">
+                    <h3 class="font-bold text-slate-700 border-b pb-1">1. Identité &amp; Fonction</h3>
+                    <div><label class="block text-sm font-medium">Identifiant (Automatique)</label><input type="text" id="PERS_id" disabled readonly class="w-full p-2.5 bg-slate-100 border rounded-lg text-slate-500 cursor-not-allowed"></div>
+                    <div><label class="block text-sm font-medium">Civilité *</label>
+                        <select id="PERS_Civilite" required class="w-full p-2.5 border rounded-lg bg-white">
+                            <option value="">-- Choisir --</option><option>Madame</option><option>Monsieur</option><option>Soeur</option><option>Père</option><option>Frère</option><option>Monseigneur</option>
+                        </select>
+                    </div>
+                    <div><label class="block text-sm font-medium">Nom *</label><input type="text" id="PERS_NOM" required class="w-full p-2.5 border rounded-lg uppercase"></div>
+                    <div><label class="block text-sm font-medium">Prénom *</label><input type="text" id="PERS_Prenom" required class="w-full p-2.5 border rounded-lg"></div>
+                    <div><label class="block text-sm font-medium">Fonction *</label>
+                        <select id="PERS_Type" required class="w-full p-2.5 border rounded-lg bg-white">
+                            <option value="">-- Choisir --</option><option value="CHEF D'ETABLISSEMENT">CHEF D'ETABLISSEMENT</option><option>GESTIONNAIRE</option><option>APS</option><option>OGEC</option><option>APEL</option><option>SECRETAIRE</option><option>TUTELLE</option><option>ENSEIGNANT</option><option>AUTRE</option>
+                        </select>
+                    </div>
+                    <div><label class="block text-sm font-medium">Date de naissance</label><input type="date" id="PERS_Datedenaissance" class="w-full p-2.5 border rounded-lg"></div>
+                    <div><label class="block text-sm font-medium">Lieu de naissance</label><input type="text" id="PERS_lieunaissance" class="w-full p-2.5 border rounded-lg"></div>
+                </div>
+                <div class="space-y-4">
+                    <h3 class="font-bold text-slate-700 border-b pb-1">2. Coordonnées</h3>
+                    <div><label class="block text-sm font-medium">Adresse</label><input type="text" id="PERS_adressepersonnelle" class="w-full p-2.5 border rounded-lg"></div>
+                    <div><label class="block text-sm font-medium">Complément d'adresse</label><input type="text" id="PERS_complementadresse" class="w-full p-2.5 border rounded-lg"></div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div><label class="block text-sm font-medium">Code postal</label><input type="text" id="PERS_Codepostal" class="w-full p-2.5 border rounded-lg"></div>
+                        <div><label class="block text-sm font-medium">Ville</label><input type="text" id="PERS_VILLE" class="w-full p-2.5 border rounded-lg"></div>
+                    </div>
+                    <div><label class="block text-sm font-medium">Pays *</label><select id="PERS_pays" required class="w-full p-2.5 border rounded-lg bg-white"><option>FRANCE</option><option>BELGIQUE</option></select></div>
+                    <div><label class="block text-sm font-medium">N° mobile</label><input type="tel" id="PERS_Telephoneportable" class="w-full p-2.5 border rounded-lg"></div>
+                    <div><label class="block text-sm font-medium">N° fixe bureau</label><input type="tel" id="PERS_Telephonebureau" class="w-full p-2.5 border rounded-lg"></div>
+                    <div><label class="block text-sm font-medium">N° téléphone personnel</label><input type="tel" id="PERS_Telephonepersonnel" class="w-full p-2.5 border rounded-lg"></div>
+                </div>
+                <div class="space-y-4 lg:col-span-1 bg-slate-50 p-4 rounded-xl border">
+                    <h3 class="font-bold text-slate-700 border-b pb-1">3. Communication &amp; Photo</h3>
+                    <div><label class="block text-sm font-medium">Courriel principal *</label><input type="email" id="PERS_courriel1" required class="w-full p-3 border rounded-lg bg-white text-base"></div>
+                    <div><label class="block text-sm font-medium">Courriel secondaire</label><input type="email" id="PERS_Courriel2" class="w-full p-3 border rounded-lg bg-white text-base"></div>
+                    <div><label class="block text-sm font-medium">Établissement de référence *</label><select id="PERS_etab" required class="w-full p-2.5 border rounded-lg bg-white"></select></div>
+                    <div><label class="block text-sm font-medium mb-1">Photo</label>
+                        <div class="w-full h-40 bg-white border rounded-lg flex items-center justify-center overflow-hidden shadow-inner">
+                            <img id="photo-preview" src="" alt="Photo" class="object-contain h-full w-full hidden">
+                            <span id="photo-placeholder" class="text-xs text-slate-400">Aucune photo</span>
+                        </div>
+                    </div>
+                    <div><label class="block text-sm font-medium">Télécharger une photo</label><input type="file" id="photo-file" accept="image/jpeg, image/png" class="w-full text-sm text-slate-500"></div>
+                </div>
+                <div class="col-span-1 lg:col-span-3 flex justify-between border-t pt-4 mt-4">
+                    <button type="button" onclick="showView('view-choice')" class="bg-slate-300 text-slate-700 px-6 py-2.5 rounded-lg font-medium">Retour</button>
+                    <button type="submit" id="submit-btn-personnes" class="bg-red-900 text-white px-8 py-2.5 rounded-lg hover:bg-red-800 transition font-medium">Valider et enregistrer</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- FORMULAIRE 2 : ÉTABLISSEMENTS -->
+        <div id="view-form-etablissements" class="app-view hidden bg-white p-8 rounded-xl shadow-lg mt-6">
+            <h2 class="text-2xl font-semibold mb-6 text-red-900 border-b pb-3">Fiche Établissement</h2>
+            <form id="form-etablissements-data" onsubmit="saveRecord(event, 'etablissements')" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="space-y-4">
+                    <div><label class="block text-sm font-medium">Code établissement (ETAB_id) *</label><input type="text" id="ETAB_id" readonly class="w-full p-2.5 bg-slate-100 border rounded-lg text-slate-500 cursor-not-allowed"></div>
+                    <div><label class="block text-sm font-medium">Nom de l'établissement *</label><input type="text" id="ETAB_nom" required class="w-full p-2.5 border rounded-lg"></div>
+                    <div><label class="block text-sm font-medium">Adresse</label><input type="text" id="ETAB_adresse" class="w-full p-2.5 border rounded-lg"></div>
+                    <div><label class="block text-sm font-medium">Complément d'adresse</label><input type="text" id="ETAB_complémentadresse" class="w-full p-2.5 border rounded-lg"></div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div><label class="block text-sm font-medium">Code postal</label><input type="text" id="ETAB_codepostal" class="w-full p-2.5 border rounded-lg"></div>
+                        <div><label class="block text-sm font-medium">Ville *</label><input type="text" id="ETAB_ville" required class="w-full p-2.5 border rounded-lg"></div>
+                    </div>
+                    <div><label class="block text-sm font-medium">Pays</label><input type="text" id="ETAB_pays" value="FRANCE" class="w-full p-2.5 border rounded-lg"></div>
+                </div>
+                <div class="space-y-4">
+                    <div><label class="block text-sm font-medium">Courriel</label><input type="email" id="ETAB_courriel" class="w-full p-2.5 border rounded-lg"></div>
+                    <div><label class="block text-sm font-medium">Téléphone</label><input type="tel" id="ETAB_telephone" class="w-full p-2.5 border rounded-lg"></div>
+                    <div><label class="block text-sm font-medium">Site internet</label><input type="text" id="ETAB_siteinternet" class="w-full p-2.5 border rounded-lg"></div>
+                    <div><label class="block text-sm font-medium">Rattachement facturation *</label>
+                        <select id="ETAB_facturation" required class="w-full p-2.5 border rounded-lg bg-white"><option>USAM</option><option>UUR</option><option>BELGIQUE</option></select>
+                    </div>
+                    <div><label class="block text-sm font-medium">OGEC de rattachement</label><select id="ETAB_OGEC" class="w-full p-2.5 border rounded-lg bg-white"></select></div>
+                    <div><label class="block text-sm font-medium">APEL de rattachement</label><select id="ETAB_apel" class="w-full p-2.5 border rounded-lg bg-white"></select></div>
+                    <div><label class="block text-sm font-medium">Diocèse</label><select id="ETAB_DIO" class="w-full p-2.5 border rounded-lg bg-white"></select></div>
+                    <div><label class="block text-sm font-medium">Région</label><input type="text" id="ETAB_REGION" class="w-full p-2.5 border rounded-lg"></div>
+                </div>
+                <div class="col-span-1 md:col-span-2 flex justify-between border-t pt-4 mt-4">
+                    <button type="button" onclick="showView('view-choice')" class="bg-slate-300 text-slate-700 px-6 py-2.5 rounded-lg font-medium">Retour</button>
+                    <button type="submit" id="submit-btn-etablissements" class="bg-red-900 text-white px-8 py-2.5 rounded-lg hover:bg-red-800 transition font-medium">Valider et enregistrer</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- FORMULAIRE 3 : UNITÉS PÉDAGOGIQUES -->
+        <div id="view-form-unites_pedagogiques" class="app-view hidden bg-white p-8 rounded-xl shadow-lg mt-6">
+            <h2 class="text-2xl font-semibold mb-6 text-red-900 border-b pb-3">Fiche Unité Pédagogique</h2>
+            <form id="form-unites_pedagogiques-data" onsubmit="saveRecord(event, 'unites_pedagogiques')" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="space-y-4">
+                    <div><label class="block text-sm font-medium">Code Unité Pédagogique (UP_id) *</label><input type="text" id="UP_id" readonly class="w-full p-2.5 bg-slate-100 border rounded-lg text-slate-500 cursor-not-allowed"></div>
+                    <div><label class="block text-sm font-medium">Nom de l'unité pédagogique *</label><input type="text" id="UP_NOM" required class="w-full p-2.5 border rounded-lg"></div>
+                    <div><label class="block text-sm font-medium">Type d'unité pédagogique</label><input type="text" id="UP_type" class="w-full p-2.5 border rounded-lg"></div>
+                    <div><label class="block text-sm font-medium">RNE</label><input type="text" id="UP_rne" class="w-full p-2.5 border rounded-lg"></div>
+                    <div><label class="block text-sm font-medium">Établissement de rattachement *</label><select id="UP_etablissement" required class="w-full p-2.5 border rounded-lg bg-white"></select></div>
+                    <div><label class="block text-sm font-medium">Adresse</label><input type="text" id="UP_adresse" class="w-full p-2.5 border rounded-lg"></div>
+                    <div><label class="block text-sm font-medium">Complément d'adresse</label><input type="text" id="UP_complementadresse" class="w-full p-2.5 border rounded-lg"></div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div><label class="block text-sm font-medium">Code postal</label><input type="text" id="UP_codepostal" class="w-full p-2.5 border rounded-lg"></div>
+                        <div><label class="block text-sm font-medium">Ville</label><input type="text" id="UP_ville" class="w-full p-2.5 border rounded-lg"></div>
+                    </div>
+                </div>
+                <div class="space-y-4">
+                    <div><label class="block text-sm font-medium">Courriel</label><input type="email" id="UP_courriel" class="w-full p-2.5 border rounded-lg"></div>
+                    <div><label class="block text-sm font-medium">Téléphone</label><input type="tel" id="UP_telephone" class="w-full p-2.5 border rounded-lg"></div>
+                    <div><label class="block text-sm font-medium">Site internet</label><input type="text" id="UP_siteinternet" class="w-full p-2.5 border rounded-lg"></div>
+                    <div><label class="block text-sm font-medium">Chef d'établissement</label><select id="UP_chefetablissement" class="w-full p-2.5 border rounded-lg bg-white"></select></div>
+                    <div><label class="block text-sm font-medium">Adjoint</label><select id="UP_adjoint" class="w-full p-2.5 border rounded-lg bg-white"></select></div>
+                    <div><label class="block text-sm font-medium">APS</label><select id="UP_APS" class="w-full p-2.5 border rounded-lg bg-white"></select></div>
+                    <div><label class="block text-sm font-medium">Secrétaire</label><select id="UP_secretaire" class="w-full p-2.5 border rounded-lg bg-white"></select></div>
+                </div>
+                <div class="col-span-1 md:col-span-2 flex justify-between border-t pt-4 mt-4">
+                    <button type="button" onclick="showView('view-choice')" class="bg-slate-300 text-slate-700 px-6 py-2.5 rounded-lg font-medium">Retour</button>
+                    <button type="submit" id="submit-btn-unites_pedagogiques" class="bg-red-900 text-white px-8 py-2.5 rounded-lg hover:bg-red-800 transition font-medium">Valider et enregistrer</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- FORMULAIRE 4 : OGEC -->
+        <div id="view-form-ogec" class="app-view hidden bg-white p-8 rounded-xl shadow-lg mt-6">
+            <h2 class="text-2xl font-semibold mb-6 text-red-900 border-b pb-3">Fiche OGEC</h2>
+            <form id="form-ogec-data" onsubmit="saveRecord(event, 'ogec')" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="space-y-4">
+                    <div><label class="block text-sm font-medium">Code OGEC (OGEC_id) *</label><input type="text" id="OGEC_id" readonly class="w-full p-2.5 bg-slate-100 border rounded-lg text-slate-500 cursor-not-allowed"></div>
+                    <div><label class="block text-sm font-medium">Nom de l'OGEC *</label><input type="text" id="OGEC_nom" required class="w-full p-2.5 border rounded-lg"></div>
+                    <div><label class="block text-sm font-medium">Type de statuts</label><select id="OGEC_typestatut" class="w-full p-2.5 border rounded-lg bg-white"><option>FNOGEC</option><option>AUTRE</option></select></div>
+                    <div><label class="block text-sm font-medium">Date des derniers statuts</label><input type="date" id="OGEC_datestatuts" class="w-full p-2.5 border rounded-lg"></div>
+                    <div><label class="block text-sm font-medium">SIRET</label><input type="text" id="OGEC_siret" class="w-full p-2.5 border rounded-lg"></div>
+                    <div><label class="block text-sm font-medium">Président d'OGEC</label><select id="OGEC_président" class="w-full p-2.5 border rounded-lg bg-white"></select></div>
+                    <div><label class="block text-sm font-medium">Année de la dernière élection</label><input type="text" id="OGEC_anneepresident" class="w-full p-2.5 border rounded-lg"></div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div><label class="block text-sm font-medium">Titre du Président</label>
+                            <select id="OGEC_pdttitre" class="w-full p-2.5 border rounded-lg bg-white"><option value="">-- Choisir --</option><option>Monsieur</option><option>Madame</option><option>Père</option><option>Frère</option><option>Sœur</option></select>
+                        </div>
+                        <div><label class="block text-sm font-medium">Nom du président</label><input type="text" id="OGEC_pdtNOM" class="w-full p-2.5 border rounded-lg"></div>
+                    </div>
+                    <div><label class="block text-sm font-medium">Prénom du président</label><input type="text" id="OGEC_pdtprenom" class="w-full p-2.5 border rounded-lg"></div>
+                </div>
+                <div class="space-y-4">
+                    <div><label class="block text-sm font-medium">Vice-Président</label><select id="OGEC_vicepresident" class="w-full p-2.5 border rounded-lg bg-white"></select></div>
+                    <div><label class="block text-sm font-medium">Trésorier</label><select id="OGEC_tresorier" class="w-full p-2.5 border rounded-lg bg-white"></select></div>
+                    <div><label class="block text-sm font-medium">Secrétaire</label><select id="OGEC_secretaire" class="w-full p-2.5 border rounded-lg bg-white"></select></div>
+                    <div><label class="block text-sm font-medium">Adresse</label><input type="text" id="OGEC_adresse" class="w-full p-2.5 border rounded-lg"></div>
+                    <div><label class="block text-sm font-medium">Complément d'adresse</label><input type="text" id="OGEC_complementadresse" class="w-full p-2.5 border rounded-lg"></div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div><label class="block text-sm font-medium">Code postal</label><input type="text" id="OGEC_codepostal" class="w-full p-2.5 border rounded-lg"></div>
+                        <div><label class="block text-sm font-medium">Ville</label><input type="text" id="OGEC_ville" class="w-full p-2.5 border rounded-lg"></div>
+                    </div>
+                    <div><label class="block text-sm font-medium">Pays</label><input type="text" id="OGEC_pays" value="FRANCE" class="w-full p-2.5 border rounded-lg"></div>
+                </div>
+                <div class="col-span-1 md:col-span-2 flex justify-between border-t pt-4 mt-4">
+                    <button type="button" onclick="showView('view-choice')" class="bg-slate-300 text-slate-700 px-6 py-2.5 rounded-lg font-medium">Retour</button>
+                    <button type="submit" id="submit-btn-ogec" class="bg-red-900 text-white px-8 py-2.5 rounded-lg hover:bg-red-800 transition font-medium">Valider et enregistrer</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- FORMULAIRE 5 : APEL -->
+        <div id="view-form-apel" class="app-view hidden bg-white p-8 rounded-xl shadow-lg mt-6">
+            <h2 class="text-2xl font-semibold mb-6 text-red-900 border-b pb-3">Fiche APEL</h2>
+            <form id="form-apel-data" onsubmit="saveRecord(event, 'apel')" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="space-y-4">
+                    <div><label class="block text-sm font-medium">Code APEL (APEL_id) *</label><input type="text" id="APEL_id" readonly class="w-full p-2.5 bg-slate-100 border rounded-lg text-slate-500 cursor-not-allowed"></div>
+                    <div><label class="block text-sm font-medium">Nom de l'APEL *</label><input type="text" id="APEL_nom" required class="w-full p-2.5 border rounded-lg"></div>
+                    <div><label class="block text-sm font-medium">Ville</label><input type="text" id="APEL_ville" class="w-full p-2.5 border rounded-lg"></div>
+                    <div><label class="block text-sm font-medium">Président d'APEL</label><select id="APEL_president" class="w-full p-2.5 border rounded-lg bg-white"></select></div>
+                </div>
+                <div class="space-y-4">
+                    <div><label class="block text-sm font-medium">Vice-Président</label><select id="APEL_vicepresident" class="w-full p-2.5 border rounded-lg bg-white"></select></div>
+                    <div><label class="block text-sm font-medium">Trésorier</label><select id="APEL_tresorier" class="w-full p-2.5 border rounded-lg bg-white"></select></div>
+                    <div><label class="block text-sm font-medium">Secrétaire</label><select id="APEL_secretaire" class="w-full p-2.5 border rounded-lg bg-white"></select></div>
+                </div>
+                <div class="col-span-1 md:col-span-2 flex justify-between border-t pt-4 mt-4">
+                    <button type="button" onclick="showView('view-choice')" class="bg-slate-300 text-slate-700 px-6 py-2.5 rounded-lg font-medium">Retour</button>
+                    <button type="submit" id="submit-btn-apel" class="bg-red-900 text-white px-8 py-2.5 rounded-lg hover:bg-red-800 transition font-medium">Valider et enregistrer</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- FORMULAIRE 6 : DIOCÈSES -->
+        <div id="view-form-dioceses" class="app-view hidden bg-white p-8 rounded-xl shadow-lg mt-6">
+            <h2 class="text-2xl font-semibold mb-6 text-red-900 border-b pb-3">Fiche Diocèse</h2>
+            <form id="form-dioceses-data" onsubmit="saveRecord(event, 'dioceses')" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="space-y-4">
+                    <div><label class="block text-sm font-medium">Code diocèse (DIO_id) *</label><input type="text" id="DIO_id" readonly class="w-full p-2.5 bg-slate-100 border rounded-lg text-slate-500 cursor-not-allowed"></div>
+                    <div><label class="block text-sm font-medium">Nom du diocèse *</label><input type="text" id="DIO_NOM" required class="w-full p-2.5 border rounded-lg"></div>
+                    <div><label class="block text-sm font-medium">Nom de l'Évêque</label><input type="text" id="DIO_EV_NOM" class="w-full p-2.5 border rounded-lg"></div>
+                    <div><label class="block text-sm font-medium">Prénom de l'Évêque</label><input type="text" id="DIO_EV_PRE" class="w-full p-2.5 border rounded-lg"></div>
+                    <div><label class="block text-sm font-medium">Courriel de l'Évêque</label><input type="email" id="DIO_EV_MAIL" class="w-full p-2.5 border rounded-lg"></div>
+                    <div><label class="block text-sm font-medium">Téléphone Évêché</label><input type="tel" id="DIO_EV_TEL" class="w-full p-2.5 border rounded-lg"></div>
+                    <div><label class="block text-sm font-medium">Adresse Évêché</label><input type="text" id="DIO_EV_ADR" class="w-full p-2.5 border rounded-lg"></div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div><label class="block text-sm font-medium">Code postal Évêché</label><input type="text" id="DIO_EV_CP" class="w-full p-2.5 border rounded-lg"></div>
+                        <div><label class="block text-sm font-medium">Ville Évêché</label><input type="text" id="DIO_EV_VILLE" class="w-full p-2.5 border rounded-lg"></div>
+                    </div>
+                </div>
+                <div class="space-y-4">
+                    <div><label class="block text-sm font-medium">Titre directeur diocésain</label>
+                        <select id="DIO_DD_TITRE" class="w-full p-2.5 border rounded-lg bg-white"><option value="">-- Choisir --</option><option>Monsieur</option><option>Madame</option><option>Père</option><option>Frère</option><option>Sœur</option></select>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div><label class="block text-sm font-medium">Nom directeur diocésain</label><input type="text" id="DIO_DD_NOM" class="w-full p-2.5 border rounded-lg"></div>
+                        <div><label class="block text-sm font-medium">Prénom directeur diocésain</label><input type="text" id="DIO_DD_PRE" class="w-full p-2.5 border rounded-lg"></div>
+                    </div>
+                    <div><label class="block text-sm font-medium">Courriel directeur diocésain</label><input type="email" id="DIO_DD_MAIL" class="w-full p-2.5 border rounded-lg"></div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div><label class="block text-sm font-medium">Mobile directeur</label><input type="tel" id="DIO_DD_MOB" class="w-full p-2.5 border rounded-lg"></div>
+                        <div><label class="block text-sm font-medium">Fixe direction</label><input type="tel" id="DIO_DD_TEL" class="w-full p-2.5 border rounded-lg"></div>
+                    </div>
+                    <div><label class="block text-sm font-medium">Adresse direction diocésaine</label><input type="text" id="DIO_DD_ADR" class="w-full p-2.5 border rounded-lg"></div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div><label class="block text-sm font-medium">Code postal direction</label><input type="text" id="DIO_DD_CP" class="w-full p-2.5 border rounded-lg"></div>
+                        <div><label class="block text-sm font-medium">Ville direction</label><input type="text" id="DIO_DD_VILLE" class="w-full p-2.5 border rounded-lg"></div>
+                    </div>
+                    <div><label class="block text-sm font-medium">Pays</label><input type="text" id="DIO_PAYS" value="FRANCE" class="w-full p-2.5 border rounded-lg"></div>
+                </div>
+                <div class="col-span-1 md:col-span-2 flex justify-between border-t pt-4 mt-4">
+                    <button type="button" onclick="showView('view-choice')" class="bg-slate-300 text-slate-700 px-6 py-2.5 rounded-lg font-medium">Retour</button>
+                    <button type="submit" id="submit-btn-dioceses" class="bg-red-900 text-white px-8 py-2.5 rounded-lg hover:bg-red-800 transition font-medium">Valider et enregistrer</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- SOUS-MENU 2 : ÉDITIONS, ANNUAIRES & ÉTATS ÉCONOMIQUES -->
+        <div id="view-submenu-editions" class="app-view hidden max-w-3xl mx-auto bg-white p-8 rounded-xl shadow-lg mt-10">
+            <h2 class="text-2xl font-semibold mb-6 text-red-900 border-b pb-3">Éditions, Annuaires &amp; Indicateurs</h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <button onclick="showView('view-annuaire-personnes-filter')" class="p-4 border rounded-xl hover:bg-red-50 hover:border-red-900 transition text-left"><h3 class="font-bold text-red-900">Annuaire - Personnes</h3><p class="text-xs text-slate-500 mt-1">Édition par type (tri alphabétique)</p></button>
+                <button onclick="generateAnnuaireEtablissements()" class="p-4 border rounded-xl hover:bg-red-50 hover:border-red-900 transition text-left"><h3 class="font-bold text-red-900">Annuaire - Établissements</h3><p class="text-xs text-slate-500 mt-1">Classement par ville, UP et chefs d'établissement</p></button>
+                <button onclick="generateAnnuaireOGEC()" class="p-4 border rounded-xl hover:bg-red-50 hover:border-red-900 transition text-left"><h3 class="font-bold text-red-900">Annuaire - OGEC</h3><p class="text-xs text-slate-500 mt-1">Classement par ville, SIRET, adresses et bureaux</p></button>
+                <button onclick="generateAnnuaireAPEL()" class="p-4 border rounded-xl hover:bg-red-50 hover:border-red-900 transition text-left"><h3 class="font-bold text-red-900">Annuaire - APEL</h3><p class="text-xs text-slate-500 mt-1">Classement par ville et membres du bureau</p></button>
+                <button onclick="generateAnnuaireDioceses()" class="p-4 border rounded-xl hover:bg-red-50 hover:border-red-900 transition text-left"><h3 class="font-bold text-red-900">Annuaire - Diocèses</h3><p class="text-xs text-slate-500 mt-1">Évêques et directeurs diocésains</p></button>
+                <button onclick="openConsultationEffectifsForm()" class="p-4 border rounded-xl hover:bg-red-50 hover:border-red-900 transition text-left bg-slate-50 border-slate-200"><h3 class="font-bold text-red-900">Suivi des Effectifs (6 ans)</h3><p class="text-xs text-slate-500 mt-1">Tableau comparatif par ville, unités pédagogiques et évolution %</p></button>
+                <button onclick="openEffectifPersonnelForm()" class="p-4 border rounded-xl hover:bg-red-50 hover:border-red-900 transition text-left bg-slate-50 border-slate-200"><h3 class="font-bold text-red-900">Effectifs du Personnel (6 ans)</h3><p class="text-xs text-slate-500 mt-1">Évolution des effectifs de personnel par établissement sur 6 périodes</p></button>
+                <button onclick="showView('view-synthese-eco-filter')" class="p-4 border rounded-xl hover:bg-red-50 border-red-900 transition text-left bg-red-50/30"><h3 class="font-bold text-red-900">Synthèse Économique</h3><p class="text-xs text-slate-500 mt-1">Tableau de bord triennal (T_ECO + T_EFFECTIF) &amp; Obligations</p></button>
+                <button onclick="openEmprunteurForm()" class="p-4 border rounded-xl hover:bg-red-50 hover:border-red-900 transition text-left bg-slate-50 border-slate-200"><h3 class="font-bold text-red-900">État Emprunteur (Établissement)</h3><p class="text-xs text-slate-500 mt-1">Suivi des emprunts en cours, annuités et capital restant dû</p></button>
+            </div>
+            <div class="mt-6"><button onclick="showView('view-main-menu')" class="bg-slate-300 text-slate-700 px-6 py-2 rounded-lg">Retour au Menu Principal</button></div>
+        </div>
+
+        <!-- FILTRE & RÉSULTATS ANNUAIRES -->
+        <div id="view-annuaire-personnes-filter" class="app-view hidden max-w-lg mx-auto bg-white p-8 rounded-xl shadow-lg mt-10">
+            <h2 class="text-2xl font-semibold mb-4 text-red-900">Annuaire des Personnes</h2>
+            <div class="mb-6">
+                <label class="block text-sm font-medium mb-1">Type de personne (PERS_Type)</label>
+                <select id="filter-pers-type" class="w-full p-2.5 border rounded-lg bg-white">
+                    <option value="">-- Tous les types --</option><option value="CHEF D'ETABLISSEMENT">CHEF D'ETABLISSEMENT</option><option>GESTIONNAIRE</option><option>APS</option><option>OGEC</option><option>APEL</option><option>SECRETAIRE</option><option>TUTELLE</option><option>ENSEIGNANT</option><option>AUTRE</option>
+                </select>
+            </div>
+            <div class="flex justify-between">
+                <button onclick="showView('view-submenu-editions')" class="bg-slate-300 text-slate-700 px-4 py-2 rounded-lg">Retour</button>
+                <button onclick="generateAnnuairePersonnes()" class="bg-red-900 text-white px-6 py-2 rounded-lg hover:bg-red-800">Générer l'annuaire</button>
+            </div>
+        </div>
+
+        <div id="view-annuaire-personnes-result" class="app-view hidden bg-white p-8 rounded-xl shadow-lg mt-6">
+            <div class="flex flex-col sm:flex-row justify-between items-center mb-6 border-b pb-3 gap-4">
+                <h2 id="annuaire-pers-title" class="text-2xl font-semibold text-red-900">Résultat de l'Annuaire</h2>
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="exportDataToCSV('personnes')" class="bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm hover:bg-emerald-600 transition">📥 Exporter Excel</button>
+                    <button onclick="window.print()" class="bg-slate-700 text-white px-4 py-2 rounded-lg text-sm">Imprimer / PDF</button>
+                    <button onclick="showView('view-annuaire-personnes-filter')" class="bg-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm">Changer de type</button>
+                </div>
+            </div>
+            <div id="annuaire-pers-container" class="space-y-6"></div>
+            <div class="mt-8 border-t pt-4"><button onclick="showView('view-submenu-editions')" class="bg-slate-300 text-slate-700 px-6 py-2 rounded-lg">Retour aux Éditions</button></div>
+        </div>
+
+        <div id="view-annuaire-etabs-result" class="app-view hidden bg-white p-8 rounded-xl shadow-lg mt-6">
+            <div class="flex flex-col sm:flex-row justify-between items-center mb-6 border-b pb-3 gap-4">
+                <h2 class="text-2xl font-semibold text-red-900">Annuaire des Établissements scolaires</h2>
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="exportDataToCSV('etablissements')" class="bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm hover:bg-emerald-600 transition">📥 Exporter Excel</button>
+                    <button onclick="window.print()" class="bg-slate-700 text-white px-4 py-2 rounded-lg text-sm">Imprimer / PDF</button>
+                </div>
+            </div>
+            <div id="annuaire-etabs-container" class="space-y-8"></div>
+            <div class="mt-8 border-t pt-4"><button onclick="showView('view-submenu-editions')" class="bg-slate-300 text-slate-700 px-6 py-2 rounded-lg">Retour aux Éditions</button></div>
+        </div>
+
+        <div id="view-annuaire-ogec-result" class="app-view hidden bg-white p-8 rounded-xl shadow-lg mt-6">
+            <div class="flex flex-col sm:flex-row justify-between items-center mb-6 border-b pb-3 gap-4">
+                <h2 class="text-2xl font-semibold text-red-900">Annuaire des OGEC</h2>
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="exportDataToCSV('ogec')" class="bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm hover:bg-emerald-600 transition">📥 Exporter Excel</button>
+                    <button onclick="window.print()" class="bg-slate-700 text-white px-4 py-2 rounded-lg text-sm">Imprimer / PDF</button>
+                </div>
+            </div>
+            <div id="annuaire-ogec-container" class="space-y-8"></div>
+            <div class="mt-8 border-t pt-4"><button onclick="showView('view-submenu-editions')" class="bg-slate-300 text-slate-700 px-6 py-2 rounded-lg">Retour aux Éditions</button></div>
+        </div>
+
+        <div id="view-annuaire-apel-result" class="app-view hidden bg-white p-8 rounded-xl shadow-lg mt-6">
+            <div class="flex flex-col sm:flex-row justify-between items-center mb-6 border-b pb-3 gap-4">
+                <h2 class="text-2xl font-semibold text-red-900">Annuaire des APEL</h2>
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="exportDataToCSV('apel')" class="bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm hover:bg-emerald-600 transition">📥 Exporter Excel</button>
+                    <button onclick="window.print()" class="bg-slate-700 text-white px-4 py-2 rounded-lg text-sm">Imprimer / PDF</button>
+                </div>
+            </div>
+            <div id="annuaire-apel-container" class="space-y-8"></div>
+            <div class="mt-8 border-t pt-4"><button onclick="showView('view-submenu-editions')" class="bg-slate-300 text-slate-700 px-6 py-2 rounded-lg">Retour aux Éditions</button></div>
+        </div>
+
+        <div id="view-annuaire-dioceses-result" class="app-view hidden bg-white p-8 rounded-xl shadow-lg mt-6">
+            <div class="flex flex-col sm:flex-row justify-between items-center mb-6 border-b pb-3 gap-4">
+                <h2 class="text-2xl font-semibold text-red-900">Annuaire des Diocèses</h2>
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="exportDataToCSV('dioceses')" class="bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm hover:bg-emerald-600 transition">📥 Exporter Excel</button>
+                    <button onclick="window.print()" class="bg-slate-700 text-white px-4 py-2 rounded-lg text-sm">Imprimer / PDF</button>
+                </div>
+            </div>
+            <div id="annuaire-dioceses-container" class="space-y-8"></div>
+            <div class="mt-8 border-t pt-4"><button onclick="showView('view-submenu-editions')" class="bg-slate-300 text-slate-700 px-6 py-2 rounded-lg">Retour aux Éditions</button></div>
+        </div>
+
+        <!-- SYNTHÈSE ÉCONOMIQUE -->
+        <div id="view-synthese-eco-filter" class="app-view hidden max-w-lg mx-auto bg-white p-8 rounded-xl shadow-lg mt-10">
+            <h2 class="text-2xl font-semibold mb-4 text-red-900">Synthèse Économique</h2>
+            <div class="mb-4"><label class="block text-sm font-medium mb-1">Établissement scolaire</label><select id="select-eco-etab" class="w-full p-2.5 border rounded-lg bg-white"></select></div>
+            <div class="mb-6"><label class="block text-sm font-medium mb-1">Année scolaire de référence (N)</label><select id="select-eco-annee" class="w-full p-2.5 border rounded-lg bg-white font-semibold text-red-900"></select></div>
+            <div class="flex justify-between">
+                <button onclick="showView('view-submenu-editions')" class="bg-slate-300 text-slate-700 px-4 py-2 rounded-lg">Retour</button>
+                <button onclick="generateSyntheseEco()" class="bg-red-900 text-white px-6 py-2 rounded-lg hover:bg-red-800">Générer la synthèse</button>
+            </div>
+        </div>
+
+        <div id="view-synthese-eco-result" class="app-view hidden bg-white p-8 rounded-xl shadow-lg mt-6">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 border-b pb-4 gap-4">
+                <div>
+                    <span class="text-xs font-semibold bg-red-900 text-white px-2.5 py-1 rounded uppercase" id="lbl-eco-ville">PAU</span>
+                    <h2 class="text-2xl font-bold text-slate-900 mt-1" id="lbl-eco-etab-nom">SUIVI DES INDICATEURS ÉCONOMIQUES</h2>
+                    <p class="text-xs text-slate-500 mt-1">Année de référence : <strong class="text-red-900" id="lbl-eco-annee-ref">2024-2025</strong></p>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="exportDataToCSV('synthese_eco')" class="bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm hover:bg-emerald-600 transition">📥 Exporter en Excel</button>
+                    <button onclick="window.print()" class="bg-slate-700 text-white px-4 py-2 rounded-lg text-sm">Imprimer / PDF</button>
+                    <button onclick="showView('view-synthese-eco-filter')" class="bg-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm">Changer de critères</button>
+                </div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse text-sm">
+                    <thead>
+                        <tr class="bg-red-900 text-white">
+                            <th class="p-3 w-1/2">Indicateurs Économiques, Financiers &amp; Réglementaires</th>
+                            <th class="p-3 text-right" id="th-annee-n2">N-2</th>
+                            <th class="p-3 text-right" id="th-annee-n1">N-1</th>
+                            <th class="p-3 text-right bg-red-950 font-bold" id="th-annee-n">N (Référence)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tb-eco-body" class="divide-y text-slate-700"></tbody>
+                </table>
+            </div>
+            <div class="mt-8 border-t pt-4 flex justify-between items-center">
+                <button onclick="showView('view-submenu-editions')" class="bg-slate-300 text-slate-700 px-6 py-2 rounded-lg">Retour aux Éditions</button>
+                <button onclick="alert('Modifications enregistrées avec succès.')" class="bg-emerald-700 text-white px-6 py-2 rounded-lg hover:bg-emerald-600 transition text-sm">💾 Enregistrer les modifications</button>
+            </div>
+        </div>
+
+        <!-- EFFECTIFS PERSONNEL -->
+        <div id="view-effectif-personnel-filter" class="app-view hidden max-w-lg mx-auto bg-white p-8 rounded-xl shadow-lg mt-10">
+            <h2 class="text-2xl font-semibold mb-4 text-red-900">Suivi des Effectifs de Personnel</h2>
+            <div class="mb-4"><label class="block text-sm font-medium mb-1">Établissement scolaire</label><select id="select-effpers-etab" class="w-full p-2.5 border rounded-lg bg-white"></select></div>
+            <div class="mb-6"><label class="block text-sm font-medium mb-1">Année scolaire la plus récente (N)</label><select id="select-effpers-annee-ref" class="w-full p-2.5 border rounded-lg bg-white font-semibold text-red-900"></select></div>
+            <div class="flex justify-between">
+                <button onclick="showView('view-submenu-editions')" class="bg-slate-300 text-slate-700 px-4 py-2 rounded-lg">Retour</button>
+                <button onclick="generateTableauEffectifPersonnel()" class="bg-red-900 text-white px-6 py-2 rounded-lg hover:bg-red-800 transition">Générer l'état</button>
+            </div>
+        </div>
+
+        <div id="view-effectif-personnel-result" class="app-view hidden bg-white p-8 rounded-xl shadow-lg mt-6">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 border-b pb-4 gap-4">
+                <div>
+                    <span class="text-xs font-semibold bg-red-900 text-white px-2.5 py-1 rounded uppercase" id="lbl-effpers-ville">VILLE</span>
+                    <h2 class="text-2xl font-bold text-slate-900 mt-1" id="lbl-effpers-etab-nom">SUIVI DES EFFECTIFS DE PERSONNEL</h2>
+                    <p class="text-xs text-slate-500 mt-1">Référence (N) : <strong class="text-red-900" id="lbl-effpers-annee-ref">2025-2026</strong></p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="exportDataToCSV('eff_personnel')" class="bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm hover:bg-emerald-600 transition">📥 Exporter Excel (.csv)</button>
+                    <button onclick="window.print()" class="bg-slate-700 text-white px-4 py-2 rounded-lg text-sm hover:bg-slate-600 transition">🖨️ Imprimer / PDF</button>
+                    <button onclick="openEffectifPersonnelForm()" class="bg-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm">Changer de critères</button>
+                </div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse text-xs sm:text-sm">
+                    <thead><tr class="bg-red-900 text-white font-bold" id="tr-effpers-headers"></tr></thead>
+                    <tbody id="tb-effpers-body" class="divide-y text-slate-700"></tbody>
+                </table>
+            </div>
+            <div class="mt-8 border-t pt-4"><button onclick="showView('view-submenu-editions')" class="bg-slate-300 text-slate-700 px-6 py-2 rounded-lg">Retour aux Éditions</button></div>
+        </div>
+
+        <!-- CAMPAGNES D'ENQUÊTES -->
+        <div id="view-courriels-enquetes" class="app-view hidden max-w-5xl mx-auto bg-white p-8 rounded-xl shadow-lg mt-10">
+            <h2 class="text-2xl font-semibold mb-6 text-red-900 border-b pb-3">Campagnes d'Enquêtes &amp; Envois de Courriels</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                <button onclick="openCampagneForm('economique')" class="p-4 border rounded-xl hover:bg-red-50 hover:border-red-900 transition text-left bg-red-50/20"><span class="text-xs font-semibold text-red-900 uppercase">Enquête n°1</span><h3 class="font-bold text-lg text-slate-900 mt-1">Données Économiques</h3><p class="text-xs text-slate-500 mt-1">Limite : 28 février</p></button>
+                <button onclick="openCampagneForm('effectif_eleves')" class="p-4 border rounded-xl hover:bg-red-50 hover:border-red-900 transition text-left"><span class="text-xs font-semibold text-red-900 uppercase">Enquête n°2</span><h3 class="font-bold text-lg text-slate-900 mt-1">Effectifs Élèves</h3><p class="text-xs text-slate-500 mt-1">Limite : 15 septembre</p></button>
+                <button onclick="openCampagneForm('effectif_personnel')" class="p-4 border rounded-xl hover:bg-red-50 hover:border-red-900 transition text-left"><span class="text-xs font-semibold text-red-900 uppercase">Enquête n°3</span><h3 class="font-bold text-lg text-slate-900 mt-1">Effectifs Personnel</h3><p class="text-xs text-slate-500 mt-1">Limite : 15 septembre</p></button>
+            </div>
+            <div><button onclick="showView('view-main-menu')" class="bg-slate-300 text-slate-700 px-6 py-2 rounded-lg">Retour au Menu Principal</button></div>
+        </div>
+
+        <div id="view-campagne-runner" class="app-view hidden max-w-5xl mx-auto bg-white p-8 rounded-xl shadow-lg mt-10">
+            <div class="flex justify-between items-center border-b pb-4 mb-6">
+                <div>
+                    <span class="text-xs font-semibold bg-red-900 text-white px-2.5 py-1 rounded uppercase" id="lbl-campagne-type">Campagne</span>
+                    <h2 class="text-2xl font-bold text-slate-900 mt-1" id="lbl-campagne-titre">Préparation de la campagne</h2>
+                </div>
+                <button onclick="showView('view-courriels-enquetes')" class="bg-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm">Changer d'enquête</button>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6 bg-slate-50 p-4 rounded-xl border">
+                <div><label class="block text-sm font-medium mb-1">Année scolaire / Exercice de référence</label><select id="select-campagne-annee" onchange="mettreAJourApercuMail()" class="w-full p-2.5 border rounded-lg bg-white font-semibold text-red-900"></select></div>
+                <div class="flex items-end text-xs text-slate-500"><p>💡 <strong>Destinataires :</strong> Chefs d'établissement disposant d'un courriel et d'un établissement de référence.</p></div>
+            </div>
+            <div class="mb-6">
+                <div class="flex justify-between items-center mb-2">
+                    <h3 class="font-bold text-slate-700">Sélection des destinataires (<span id="lbl-nb-selectionnes">0</span> / <span id="lbl-nb-total">0</span>)</h3>
+                    <div class="space-x-2">
+                        <button type="button" onclick="toggleCheckboxes('.chef-checkbox', true, updateCampagneCount)" class="text-xs text-blue-800 underline">Tout cocher</button> |
+                        <button type="button" onclick="toggleCheckboxes('.chef-checkbox', false, updateCampagneCount)" class="text-xs text-blue-800 underline">Tout décocher</button>
+                    </div>
+                </div>
+                <div class="max-h-72 overflow-y-auto border rounded-xl divide-y bg-white" id="container-chefs-list"></div>
+            </div>
+            <div class="mb-6 bg-amber-50/50 border border-amber-200 p-4 rounded-xl">
+                <h4 class="font-bold text-xs text-amber-900 uppercase mb-2">Aperçu du modèle de message type :</h4>
+                <div id="apercu-corps-mail" class="text-xs font-mono text-slate-700 bg-white p-3 border rounded whitespace-pre-line"></div>
+            </div>
+            <div class="flex flex-col sm:flex-row justify-between items-center border-t pt-4 gap-4">
+                <button onclick="showView('view-courriels-enquetes')" class="bg-slate-300 text-slate-700 px-6 py-2.5 rounded-lg font-medium w-full sm:w-auto">Retour</button>
+                <div class="flex flex-wrap gap-2 w-full sm:w-auto justify-end">
+                    <button onclick="executerEnvoiCampagne('outlook')" class="bg-sky-800 text-white px-4 py-2.5 rounded-lg hover:bg-sky-700 transition font-medium text-xs sm:text-sm">📧 Outlook</button>
+                    <button onclick="executerEnvoiCampagne('resend')" class="bg-emerald-700 text-white px-4 py-2.5 rounded-lg hover:bg-emerald-600 transition font-medium text-xs sm:text-sm">🚀 Envoyer via Resend</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- COURRIELS COLLECTIFS -->
+        <div id="view-courriels-collectifs" class="app-view hidden max-w-4xl mx-auto bg-white p-8 rounded-xl shadow-lg mt-10">
+            <div class="flex justify-between items-center border-b pb-4 mb-6">
+                <div><span class="text-xs font-semibold bg-red-900 text-white px-2.5 py-1 rounded uppercase">Communication</span><h2 class="text-2xl font-bold text-slate-900 mt-1">Envoi de Courriels Collectifs par Type</h2></div>
+                <button onclick="showView('view-main-menu')" class="bg-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm">Retour au Menu</button>
+            </div>
+            <div class="mb-6 bg-slate-50 p-4 rounded-xl border">
+                <label class="block text-sm font-medium mb-1 text-slate-700">1. Sélectionner le type de destinataires (PERS_Type)</label>
+                <select id="select-collectif-type" onchange="chargerPersonnesPourCollectif()" class="w-full p-2.5 border rounded-lg bg-white font-semibold text-red-900">
+                    <option value="">-- Choisir un type de personne --</option><option value="CHEF D'ETABLISSEMENT">CHEF D'ETABLISSEMENT</option><option>GESTIONNAIRE</option><option>APS</option><option>OGEC</option><option>APEL</option><option>SECRETAIRE</option><option>TUTELLE</option><option>ENSEIGNANT</option><option>AUTRE</option>
+                </select>
+            </div>
+            <div class="mb-6">
+                <div class="flex justify-between items-center mb-2">
+                    <h3 class="font-bold text-slate-700 text-sm">2. Destinataires (<span id="lbl-collectif-selectionnes">0</span> / <span id="lbl-collectif-total">0</span>)</h3>
+                    <div class="space-x-2">
+                        <button type="button" onclick="toggleCheckboxes('.collectif-checkbox', true, updateCollectifCount)" class="text-xs text-blue-800 underline">Tout cocher</button> |
+                        <button type="button" onclick="toggleCheckboxes('.collectif-checkbox', false, updateCollectifCount)" class="text-xs text-blue-800 underline">Tout décocher</button>
+                    </div>
+                </div>
+                <div class="max-h-48 overflow-y-auto border rounded-xl divide-y bg-white p-2" id="container-collectif-list"><p class="text-center text-slate-400 text-sm py-4">Veuillez d'abord sélectionner un type de personne.</p></div>
+            </div>
+            <div class="space-y-4 mb-6 border-t pt-4">
+                <h3 class="font-bold text-slate-700 text-sm">3. Rédaction du message</h3>
+                <div><label class="block text-sm font-medium mb-1">Objet du courriel</label><input type="text" id="input-collectif-objet" class="w-full p-2.5 border rounded-lg bg-white"></div>
+                <div><label class="block text-sm font-medium mb-1">Corps du message</label><textarea id="textarea-collectif-corps" rows="6" class="w-full p-2.5 border rounded-lg bg-white text-sm"></textarea></div>
+                <div><label class="block text-sm font-medium mb-1">Pièces jointes</label><input type="file" id="file-collectif-pieces" multiple class="w-full text-sm text-slate-500 border p-2 rounded-lg bg-slate-50"></div>
+            </div>
+            <div class="flex flex-col sm:flex-row justify-between items-center border-t pt-4 gap-4">
+                <button onclick="showView('view-main-menu')" class="bg-slate-300 text-slate-700 px-6 py-2.5 rounded-lg font-medium w-full sm:w-auto">Annuler</button>
+                <div class="flex flex-wrap gap-2 w-full sm:w-auto justify-end">
+                    <button onclick="executerCourrielCollectif('outlook')" class="bg-sky-800 text-white px-4 py-2.5 rounded-lg hover:bg-sky-700 transition font-medium text-xs sm:text-sm">📧 Outlook</button>
+                    <button onclick="executerCourrielCollectif('resend')" class="bg-emerald-700 text-white px-4 py-2.5 rounded-lg hover:bg-emerald-600 transition font-medium text-xs sm:text-sm">🚀 Envoyer via Resend</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- EFFECTIFS ÉLÈVES (6 ANS) -->
+        <div id="view-effectifs-filter" class="app-view hidden max-w-lg mx-auto bg-white p-8 rounded-xl shadow-lg mt-10">
+            <h2 class="text-2xl font-semibold mb-4 text-red-900">Suivi des Effectifs Élèves</h2>
+            <div class="mb-4"><label class="block text-sm font-medium mb-1">Année la plus récente (N)</label><select id="select-effectifs-annee-ref" class="w-full p-2.5 border rounded-lg bg-white font-semibold text-red-900"></select></div>
+            <div class="mb-6"><label class="block text-sm font-medium mb-1">Périmètre</label>
+                <select id="select-effectifs-perimetre" class="w-full p-2.5 border rounded-lg bg-white font-medium text-slate-800">
+                    <option value="tous">Tous les établissements (Mons inclus)</option><option value="france_uniquement">Établissements français uniquement (Sans Mons)</option>
+                </select>
+            </div>
+            <div class="flex justify-between">
+                <button onclick="showView('view-submenu-editions')" class="bg-slate-300 text-slate-700 px-4 py-2 rounded-lg">Retour</button>
+                <button onclick="generateTableauEffectifs()" class="bg-red-900 text-white px-6 py-2 rounded-lg hover:bg-red-800 transition">Générer l'état</button>
+            </div>
+        </div>
+
+        <div id="view-effectifs-result" class="app-view hidden bg-white p-8 rounded-xl shadow-lg mt-6">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 border-b pb-4 gap-4">
+                <div><h2 class="text-2xl font-bold text-slate-900">SUIVI DES EFFECTIFS ÉLÈVES (6 ANS)</h2><p class="text-xs text-slate-500 mt-1">Année de référence (N) : <strong class="text-red-900" id="lbl-effectifs-annee-ref"></strong></p></div>
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="exportDataToCSV('effectifs_6ans')" class="bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm hover:bg-emerald-600 transition">📥 Exporter Excel (.csv)</button>
+                    <button onclick="window.print()" class="bg-slate-700 text-white px-4 py-2 rounded-lg text-sm hover:bg-slate-600 transition">🖨️ Imprimer / PDF</button>
+                    <button onclick="openConsultationEffectifsForm()" class="bg-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm">Changer de critères</button>
+                </div>
+            </div>
+            <div id="container-effectifs-villes" class="space-y-10 overflow-x-auto"></div>
+            <div class="mt-8 border-t pt-4"><button onclick="showView('view-submenu-editions')" class="bg-slate-300 text-slate-700 px-6 py-2 rounded-lg">Retour aux Éditions</button></div>
+        </div>
+
+        <!-- ÉTAT EMPRUNTEUR -->
+        <div id="view-emprunteur-filter" class="app-view hidden max-w-lg mx-auto bg-white p-8 rounded-xl shadow-lg mt-10">
+            <h2 class="text-2xl font-semibold mb-4 text-red-900">État Emprunteur - Établissement</h2>
+            <div class="mb-4"><label class="block text-sm font-medium mb-1">Établissement</label><select id="select-emprunteur-etab" class="w-full p-2.5 border rounded-lg bg-white"></select></div>
+            <div class="mb-6"><label class="block text-sm font-medium mb-1">Date de l'état emprunteur</label><input type="date" id="input-emprunteur-date" class="w-full p-2.5 border rounded-lg bg-white font-semibold text-red-900"></div>
+            <div class="flex justify-between">
+                <button onclick="showView('view-submenu-editions')" class="bg-slate-300 text-slate-700 px-4 py-2 rounded-lg">Retour</button>
+                <button onclick="generateEtatEmprunteur()" class="bg-red-900 text-white px-6 py-2 rounded-lg hover:bg-red-800 transition">Générer l'état</button>
+            </div>
+        </div>
+
+        <div id="view-emprunteur-result" class="app-view hidden bg-white p-8 rounded-xl shadow-lg mt-6">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 border-b pb-4 gap-4">
+                <div>
+                    <div class="flex gap-2">
+                        <span class="text-xs font-semibold bg-red-900 text-white px-2.5 py-1 rounded uppercase" id="lbl-emp-etab-ville"></span>
+                        <span class="text-xs font-semibold bg-slate-700 text-white px-2.5 py-1 rounded uppercase" id="lbl-emp-etab-nom"></span>
+                    </div>
+                    <h2 class="text-2xl font-bold text-slate-900 mt-2">ETAT EMPRUNTEUR</h2>
+                    <p class="text-xs text-slate-500 mt-1">Arrêté au : <strong class="text-red-900" id="lbl-emp-date-ref"></strong></p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    <button onclick="exportDataToCSV('emprunteur')" class="bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm hover:bg-emerald-600 transition">📥 Exporter Excel (.csv)</button>
+                    <button onclick="window.print()" class="bg-slate-700 text-white px-4 py-2 rounded-lg text-sm hover:bg-slate-600 transition">🖨️ Imprimer / PDF</button>
+                    <button onclick="openEmprunteurForm()" class="bg-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm">Changer de critères</button>
+                </div>
+            </div>
+            <div id="container-emprunteur-table" class="overflow-x-auto"></div>
+            <div class="mt-8 border-t pt-4"><button onclick="showView('view-submenu-editions')" class="bg-slate-300 text-slate-700 px-6 py-2 rounded-lg">Retour aux Éditions</button></div>
+        </div>
+
+        <!-- PARAMÈTRES & ADMINISTRATION -->
+        <div id="view-parametres" class="app-view hidden max-w-5xl mx-auto bg-white p-8 rounded-xl shadow-lg mt-10">
+            <div class="flex justify-between items-center border-b pb-4 mb-6">
+                <div><span class="text-xs font-semibold bg-red-900 text-white px-2.5 py-1 rounded uppercase">Administration</span><h2 class="text-2xl font-bold text-slate-900 mt-1">Paramètres &amp; Gestion des Utilisateurs</h2></div>
+                <button onclick="showView('view-main-menu')" class="bg-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm">Retour au Menu</button>
+            </div>
+            <div class="flex border-b mb-6">
+                <button onclick="switchParamTab('utilisateurs')" id="tab-btn-utilisateurs" class="param-tab px-6 py-3 font-bold text-red-900 border-b-2 border-red-900">Gestion des Utilisateurs</button>
+                <button onclick="switchParamTab('constantes')" id="tab-btn-constantes" class="param-tab px-6 py-3 font-semibold text-slate-500">Constantes (T_PARAM)</button>
+                <button onclick="switchParamTab('logs')" id="tab-btn-logs" class="param-tab px-6 py-3 font-semibold text-slate-500">Journal des Connexions</button>
+            </div>
+
+            <div id="param-section-utilisateurs" class="param-sec space-y-6">
+                <div class="flex justify-between items-center"><h3 class="font-bold text-lg text-slate-800">Liste des utilisateurs</h3><button onclick="openModalUser()" class="bg-red-900 text-white px-4 py-2 rounded-lg text-sm hover:bg-red-800 transition">+ Nouvel Utilisateur</button></div>
+                <div class="overflow-x-auto border rounded-xl"><table class="w-full text-left border-collapse text-sm"><thead><tr class="bg-slate-100 text-slate-800 font-bold border-b"><th class="p-3">Utilisateur</th><th class="p-3">Rôle</th><th class="p-3 text-right">Actions</th></tr></thead><tbody id="tbody-users-list" class="divide-y text-slate-700"></tbody></table></div>
+            </div>
+
+            <div id="param-section-constantes" class="param-sec hidden space-y-6">
+                <h3 class="font-bold text-lg text-slate-800">Paramètres généraux de l'application</h3>
+                <div class="overflow-x-auto border rounded-xl"><table class="w-full text-left border-collapse text-sm"><thead><tr class="bg-slate-100 text-slate-800 font-bold border-b"><th class="p-3">Paramètre</th><th class="p-3">Valeur</th><th class="p-3 text-right">Actions</th></tr></thead><tbody id="tbody-params-list" class="divide-y text-slate-700"></tbody></table></div>
+            </div>
+
+            <div id="param-section-logs" class="param-sec hidden space-y-6">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50 p-4 rounded-xl border">
+                    <div><h3 class="font-bold text-lg text-slate-800">Historique des connexions</h3></div>
+                    <div class="flex items-center gap-2"><label class="text-xs font-medium text-slate-700">Purger avant le :</label><input type="date" id="input-purge-date" class="p-2 border rounded-lg text-sm bg-white"><button onclick="purgerLogsConnexion()" class="bg-red-800 text-white px-3 py-2 rounded-lg text-xs hover:bg-red-700">Purge</button></div>
+                </div>
+                <div class="overflow-x-auto border rounded-xl max-h-96"><table class="w-full text-left border-collapse text-sm"><thead class="sticky top-0 bg-slate-100 text-slate-800 font-bold border-b"><tr><th class="p-3">Utilisateur</th><th class="p-3">Date</th><th class="p-3">Heure</th></tr></thead><tbody id="tbody-logs-list" class="divide-y text-slate-700"></tbody></table></div>
+            </div>
+        </div>
+
+        <!-- FACTURATION -->
+        <div id="view-submenu-facturation" class="app-view hidden max-w-3xl mx-auto bg-white p-8 rounded-xl shadow-lg mt-10">
+            <h2 class="text-2xl font-semibold mb-6 text-red-900 border-b pb-3">Module de Facturation</h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <button onclick="openGestionTarifs()" class="p-4 border rounded-xl hover:bg-red-50 hover:border-red-900 transition text-left"><h3 class="font-bold text-red-900 text-lg">Grille des Tarifs</h3><p class="text-xs text-slate-500 mt-1">Cotisations UUR / USAM et tarifs CE par année scolaire</p></button>
+                <button onclick="openEditionFactures()" class="p-4 border rounded-xl hover:bg-red-50 hover:border-red-900 transition text-left"><h3 class="font-bold text-red-900 text-lg">Édition des Factures</h3><p class="text-xs text-slate-500 mt-1">Calcul automatisé, impression PDF et envoi par mail</p></button>
+            </div>
+            <div class="mt-6"><button onclick="showView('view-main-menu')" class="bg-slate-300 text-slate-700 px-6 py-2 rounded-lg">Retour au Menu Principal</button></div>
+        </div>
+
+        <div id="view-tarifs-form" class="app-view hidden max-w-3xl mx-auto bg-white p-8 rounded-xl shadow-lg mt-6">
+            <div class="flex justify-between items-center border-b pb-4 mb-6"><h2 class="text-2xl font-bold text-red-900">Grille Tarifaire (T_TARIFS)</h2><button onclick="showView('view-submenu-facturation')" class="bg-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm">Retour</button></div>
+            <form onsubmit="saveTarifs(event)" class="space-y-6">
+                <div><label class="block text-sm font-medium mb-1">Année scolaire de référence *</label><select id="TARIF_anneescolaire" onchange="loadTarifsForAnnee()" class="w-full p-2.5 border rounded-lg bg-white font-bold text-red-900" required></select></div>
+                <div class="bg-slate-50 p-4 rounded-xl border space-y-4">
+                    <h3 class="font-bold text-slate-700 text-sm border-b pb-2">1. Adhésion Personne Morale</h3>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                        <div><label class="block font-medium mb-1">Moins de 100 élèves (€)</label><input type="number" step="0.01" id="TARIF_ADH100" class="w-full p-2 border rounded-lg"></div>
+                        <div><label class="block font-medium mb-1">Moins de 300 élèves (€)</label><input type="number" step="0.01" id="TARIF_ADH-300" class="w-full p-2 border rounded-lg"></div>
+                        <div><label class="block font-medium mb-1">Plus de 300 élèves (€)</label><input type="number" step="0.01" id="TARIF_ADH+300" class="w-full p-2 border rounded-lg"></div>
+                    </div>
+                </div>
+                <div class="bg-slate-50 p-4 rounded-xl border space-y-4">
+                    <h3 class="font-bold text-slate-700 text-sm border-b pb-2">2. Adhésion Chef d'Établissement</h3>
+                    <div class="w-1/2 text-xs"><label class="block font-medium mb-1">Tarif par CE (TARIFS_CE) (€)</label><input type="number" step="0.01" id="TARIFS_CE" class="w-full p-2 border rounded-lg"></div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-blue-50/50 border border-blue-200 p-4 rounded-xl space-y-3">
+                        <h3 class="font-bold text-blue-900 text-sm border-b border-blue-200 pb-2">3. Cotisations UUR (€/élève)</h3>
+                        <div><label class="block text-xs font-medium">École UUR</label><input type="number" step="0.01" id="TARIF_ECOLEUUR" class="w-full p-2 border rounded-lg"></div>
+                        <div><label class="block text-xs font-medium">Collège UUR</label><input type="number" step="0.01" id="TARIF_COLLEGEUUR" class="w-full p-2 border rounded-lg"></div>
+                        <div><label class="block text-xs font-medium">Lycée UUR</label><input type="number" step="0.01" id="TARIF_LYCEEUUR" class="w-full p-2 border rounded-lg"></div>
+                    </div>
+                    <div class="bg-amber-50/50 border border-amber-200 p-4 rounded-xl space-y-3">
+                        <h3 class="font-bold text-amber-900 text-sm border-b border-amber-200 pb-2">4. Cotisations USAM (€/élève)</h3>
+                        <div><label class="block text-xs font-medium">École USAM</label><input type="number" step="0.01" id="TARIF_ECOLEUSAM" class="w-full p-2 border rounded-lg"></div>
+                        <div><label class="block text-xs font-medium">Collège USAM</label><input type="number" step="0.01" id="TARIF_COLLEGEUSAM" class="w-full p-2 border rounded-lg"></div>
+                        <div><label class="block text-xs font-medium">Lycée USAM</label><input type="number" step="0.01" id="TARIF_LYCEEUSAM" class="w-full p-2 border rounded-lg"></div>
+                    </div>
+                </div>
+                <div class="flex justify-between border-t pt-4">
+                    <button type="button" onclick="showView('view-submenu-facturation')" class="bg-slate-300 text-slate-700 px-6 py-2.5 rounded-lg">Annuler</button>
+                    <button type="submit" class="bg-red-900 text-white px-8 py-2.5 rounded-lg hover:bg-red-800 transition font-medium">Enregistrer la grille tarifaire</button>
+                </div>
+            </form>
+        </div>
+
+        <div id="view-factures-runner" class="app-view hidden max-w-6xl mx-auto bg-white p-8 rounded-xl shadow-lg mt-6">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b pb-4 mb-6 gap-4">
+                <div><span class="text-xs font-semibold bg-red-900 text-white px-2.5 py-1 rounded uppercase">Facturation</span><h2 class="text-2xl font-bold text-slate-900 mt-1">Calcul &amp; Édition des Factures</h2></div>
+                <button onclick="showView('view-submenu-facturation')" class="bg-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm">Retour</button>
+            </div>
+            <div class="mb-6 bg-slate-50 p-4 rounded-xl border flex flex-col sm:flex-row justify-between items-center gap-4">
+                <div class="w-full sm:w-1/2"><label class="block text-sm font-medium mb-1">Année scolaire à éditer</label><select id="select-facture-annee" onchange="calculerFacturesReseau()" class="w-full p-2.5 border rounded-lg bg-white font-bold text-red-900"></select></div>
+                <div class="text-xs text-slate-500"><p>💡 Exclut automatiquement <strong>MONS</strong> et dédoublonne les CE multi-UP.</p></div>
+            </div>
+            <div class="mb-6">
+                <div class="flex justify-between items-center mb-2">
+                    <h3 class="font-bold text-slate-700 text-sm">Établissements (<span id="lbl-factures-selected">0</span> / <span id="lbl-factures-total">0</span>)</h3>
+                    <div class="space-x-2">
+                        <button type="button" onclick="toggleCheckboxes('.fact-checkbox', true, updateFacturesCount)" class="text-xs text-blue-800 underline">Tout cocher</button> |
+                        <button type="button" onclick="toggleCheckboxes('.fact-checkbox', false, updateFacturesCount)" class="text-xs text-blue-800 underline">Tout décocher</button>
+                    </div>
+                </div>
+                <div class="overflow-x-auto border rounded-xl max-h-96">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead class="sticky top-0 bg-slate-100 text-slate-800 font-bold border-b">
+                            <tr>
+                                <th class="p-3 text-center w-10"><input type="checkbox" checked onchange="toggleCheckboxes('.fact-checkbox', this.checked, updateFacturesCount)"></th>
+                                <th class="p-3">Établissement / Ville</th><th class="p-3">Type</th>
+                                <th class="p-3 text-right">Adhésion PM</th><th class="p-3 text-right">Adhésion CE</th>
+                                <th class="p-3 text-right">Cotis. École</th><th class="p-3 text-right">Cotis. Collège</th>
+                                <th class="p-3 text-right">Cotis. Lycée+</th><th class="p-3 text-right font-bold text-red-900 bg-red-50">Total Net HT</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-factures-list" class="divide-y text-slate-700"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="flex flex-col sm:flex-row justify-between items-center border-t pt-4 gap-4">
+                <button onclick="showView('view-submenu-facturation')" class="bg-slate-300 text-slate-700 px-6 py-2.5 rounded-lg font-medium">Annuler</button>
+                <div class="flex flex-wrap gap-3">
+                    <button onclick="toutImprimerFactures()" class="bg-blue-700 text-white px-4 py-2 rounded-lg hover:bg-blue-800 text-sm">🖨️ Imprimer les factures (PDF)</button>
+                    <button onclick="imprimerRecapitulatifPDF()" class="bg-red-700 text-white px-4 py-2 rounded-lg hover:bg-red-800 text-sm">📄 Récapitulatif (PDF)</button>
+                    <button onclick="exporterRecapitulatifExcel()" class="bg-green-700 text-white px-4 py-2 rounded-lg hover:bg-green-800 text-sm">📊 Récapitulatif (Excel)</button>
+                    <button id="btn-send-resend" onclick="envoyerFacturesSelectionneesResend()" class="bg-emerald-700 hover:bg-emerald-800 text-white font-semibold px-4 py-2 rounded-lg shadow text-sm">✉️ Envoyer par mail (Resend)</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- CARRIÈRE CE -->
+        <div id="view-carriere" class="app-view hidden max-w-3xl mx-auto bg-white p-8 rounded-xl shadow-lg mt-10">
+            <h2 class="text-2xl font-semibold mb-4 text-red-900">Carrière CE</h2>
+            <p class="text-slate-600 mb-6">Module en cours de développement.</p>
+            <button onclick="showView('view-main-menu')" class="bg-slate-300 text-slate-700 px-6 py-2 rounded-lg">Retour</button>
+        </div>
+
+        <!-- MODALES -->
+        <div id="modal-user" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+            <div class="bg-white p-6 rounded-xl shadow-xl max-w-md w-full space-y-4">
+                <h3 id="modal-user-title" class="text-xl font-bold text-red-900">Nouvel utilisateur</h3>
+                <input type="hidden" id="modal-user-old-id">
+                <div><label class="block text-sm font-medium mb-1">Email de connexion</label><input type="email" id="modal-user-email" class="w-full p-2.5 border rounded-lg bg-white" required></div>
+                <div><label class="block text-sm font-medium mb-1">Mot de passe</label><input type="password" id="modal-user-pass" class="w-full p-2.5 border rounded-lg bg-white"></div>
+                <div><label class="block text-sm font-medium mb-1">Type d'accès (Rôle)</label>
+                    <select id="modal-user-type" class="w-full p-2.5 border rounded-lg bg-white"><option>ADMINISTRATION</option><option>MODIFICATION</option><option>CONSULTATION</option></select>
+                </div>
+                <div class="flex justify-end space-x-2 pt-2">
+                    <button onclick="toggleModal('modal-user', false)" class="bg-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm">Annuler</button>
+                    <button onclick="saveUserRecord()" class="bg-red-900 text-white px-4 py-2 rounded-lg text-sm hover:bg-red-800">Enregistrer</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="modal-param" class="hidden fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+            <div class="bg-white p-6 rounded-xl shadow-xl max-w-md w-full space-y-4">
+                <h3 class="text-xl font-bold text-red-900">Modifier le paramètre</h3>
+                <input type="hidden" id="modal-param-old-id">
+                <div><label class="block text-sm font-medium mb-1">Clé</label><input type="text" id="modal-param-key" disabled class="w-full p-2.5 border rounded-lg bg-slate-100"></div>
+                <div><label class="block text-sm font-medium mb-1">Valeur</label><textarea id="modal-param-val" rows="3" class="w-full p-2.5 border rounded-lg bg-white" required></textarea></div>
+                <div class="flex justify-end space-x-2 pt-2">
+                    <button onclick="toggleModal('modal-param', false)" class="bg-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm">Annuler</button>
+                    <button onclick="saveParamRecord()" class="bg-red-900 text-white px-4 py-2 rounded-lg text-sm hover:bg-red-800">Enregistrer</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="modal-quick-person" class="hidden fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 p-4">
+            <div class="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 space-y-4">
+                <div class="flex justify-between items-center border-b pb-3">
+                    <h3 class="text-lg font-bold text-red-900">Créer une nouvelle personne</h3>
+                    <button type="button" onclick="toggleModal('modal-quick-person', false)" class="text-slate-400 hover:text-slate-600 text-xl font-bold">&times;</button>
+                </div>
+                <input type="hidden" id="quick-pers-target-select">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div><label class="block text-xs font-semibold text-slate-700 mb-1">Civilité</label><select id="quick-pers-civilite" class="w-full border rounded-lg p-2 text-sm"><option>M.</option><option>Mme</option><option>Sr</option><option>Fr</option><option>P.</option></select></div>
+                    <div><label class="block text-xs font-semibold text-slate-700 mb-1">Nom *</label><input type="text" id="quick-pers-nom" class="w-full border rounded-lg p-2 text-sm uppercase" required></div>
+                    <div><label class="block text-xs font-semibold text-slate-700 mb-1">Prénom *</label><input type="text" id="quick-pers-prenom" class="w-full border rounded-lg p-2 text-sm" required></div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div><label class="block text-xs font-semibold text-slate-700 mb-1">Fonction *</label>
+                        <select id="quick-pers-type" class="w-full border rounded-lg p-2 text-sm">
+                            <option value="CHEF D'ETABLISSEMENT">CHEF D'ETABLISSEMENT</option><option>ADJOINT</option><option>APS</option><option>SECRETAIRE</option><option>OGEC</option><option>APEL</option><option>GESTIONNAIRE</option><option>TUTELLE</option><option>ENSEIGNANT</option><option>AUTRE</option>
+                        </select>
+                    </div>
+                    <div><label class="block text-xs font-semibold text-slate-700 mb-1">Téléphone portable</label><input type="text" id="quick-pers-tel" class="w-full border rounded-lg p-2 text-sm"></div>
+                </div>
+                <div><label class="block text-xs font-semibold text-slate-700 mb-1">Courriel</label><input type="email" id="quick-pers-mail" class="w-full border rounded-lg p-2 text-sm"></div>
+                <div class="flex justify-end gap-2 pt-3 border-t">
+                    <button type="button" onclick="toggleModal('modal-quick-person', false)" class="px-4 py-2 text-sm border rounded-lg hover:bg-slate-50">Annuler</button>
+                    <button type="button" onclick="saveQuickPerson()" class="px-4 py-2 text-sm bg-red-900 text-white rounded-lg hover:bg-red-800 font-semibold">Enregistrer et sélectionner</button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="bg-slate-200 text-slate-600 text-center p-3 text-sm">
+        Application Web — Tutelle Méricienne V 7.3 &copy; 2026
+    </footer>
+
+    <script src="app-tutelle.js"></script>
+</body>
+</html>
