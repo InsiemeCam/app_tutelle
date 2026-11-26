@@ -203,7 +203,7 @@ function applyRoleMenuPermissions(rawRole) {
     };
 
     setMenuBtnVisible('btn-menu-enquetes', canEdit);
-    setMenuBtnVisible('btn-menu-collectifs', canEdit);
+    setMenuBtnVisible('btn-menu-collectifs', true);
     setMenuBtnVisible('btn-menu-carriere', isAdmin);
     setMenuBtnVisible('btn-menu-facturation', isAdmin);
     setMenuBtnVisible('btn-menu-vt', isAdmin);
