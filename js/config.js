@@ -67,6 +67,16 @@ const showView = (viewId) => {
 };
 
 const openSubMenu = (menu) => {
+    const role = (appState.role || 'CONSULTATION').trim().toUpperCase();
+    const adminOnlyMenus = ['carriere-ce', 'parametres', 'facturation', 'visites-tutelle'];
+    if (adminOnlyMenus.includes(menu) && role !== 'ADMINISTRATION') {
+        alert("Accès réservé aux administrateurs.");
+        return;
+    }
+    if (menu === 'courriels-enquetes' && !['ADMINISTRATION', 'MODIFICATION'].includes(role)) {
+        alert("Accès non autorisé en mode consultation.");
+        return;
+    }
     const map = {
         'saisie-consultation': 'view-submenu-saisie',
         'editions': 'view-submenu-editions',

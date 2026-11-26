@@ -188,23 +188,47 @@ async function requestPasswordReset() {
     alert(error ? "Erreur : " + error.message : `Un lien de réinitialisation a été envoyé à ${email}.`);
 }
 
+function applyRoleMenuPermissions(rawRole) {
+    const role = String(rawRole || 'CONSULTATION').trim().toUpperCase();
+    appState.role = role;
+
+    const isAdmin = role === 'ADMINISTRATION';
+    const canEdit = role === 'ADMINISTRATION' || role === 'MODIFICATION';
+
+    const setMenuBtnVisible = (id, visible) => {
+        const el = $(id);
+        if (!el) return;
+        el.classList.toggle('hidden', !visible);
+        el.style.display = visible ? 'flex' : 'none';
+    };
+
+    setMenuBtnVisible('btn-menu-enquetes', canEdit);
+    setMenuBtnVisible('btn-menu-collectifs', canEdit);
+    setMenuBtnVisible('btn-menu-carriere', isAdmin);
+    setMenuBtnVisible('btn-menu-facturation', isAdmin);
+    setMenuBtnVisible('btn-menu-vt', isAdmin);
+    setMenuBtnVisible('btn-menu-parametres', isAdmin);
+
+    if ($('btn-enquetes-campagnes-section')) {
+        $('btn-enquetes-campagnes-section').style.display = isAdmin ? 'block' : 'none';
+    }
+    if ($('btn-enquetes-edit-section')) {
+        $('btn-enquetes-edit-section').style.display = canEdit ? 'block' : 'none';
+    }
+}
+
 async function initSessionUI(user) {
-    if (appState.userId === user.id) return;
-    appState.userId = user.id;
-    appState.role = user.user_metadata?.role || 'CONSULTATION';
+    const rawRole = user.user_metadata?.role || user.app_metadata?.role || 'CONSULTATION';
+    applyRoleMenuPermissions(rawRole);
 
     $('lbl-current-user').innerText = user.email || '';
     $('lbl-current-role').innerText = appState.role;
     $('user-session-info').classList.remove('hidden');
 
-    showView('view-main-menu');
-    const isAdmin = appState.role === 'ADMINISTRATION';
-    const canEditEnquetes = ['ADMINISTRATION', 'MODIFICATION'].includes(appState.role);
+    if (appState.userId === user.id) return;
+    appState.userId = user.id;
 
-    $('btn-menu-enquetes').style.display = canEditEnquetes ? 'flex' : 'none';
-    $('btn-enquetes-campagnes-section').style.display = isAdmin ? 'block' : 'none';
-    $('btn-enquetes-edit-section').style.display = canEditEnquetes ? 'block' : 'none';
-    ['btn-menu-carriere', 'btn-menu-parametres'].forEach(id => $(id).style.display = isAdmin ? 'flex' : 'none');
+    showView('view-main-menu');
 
     await Promise.all([loadAllDropdownReferences(), loadAnneesScolairesSelect()]);
 
@@ -219,6 +243,8 @@ async function initSessionUI(user) {
 async function logout() {
     await supabaseClient.auth.signOut();
     appState.userId = null;
+    appState.role = '';
+    applyRoleMenuPermissions('CONSULTATION');
     $('login-password').value = '';
     $('user-session-info').classList.add('hidden');
     showView('view-login');
