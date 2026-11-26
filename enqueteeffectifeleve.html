@@ -1,0 +1,385 @@
+<meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Enquête Effectifs Élèves</title>
+  <!-- Chargement du SDK Supabase -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 800px; margin: 30px auto; padding: 20px; background-color: #f4f6f8; color: #333; }
+    .card { background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; }
+    h2 { color: #1e3a8a; margin-top: 0; }
+    h3 { color: #2563eb; border-bottom: 2px solid #e2e8f0; padding-bottom: 5px; margin-top: 25px; }
+    .etab-info { background: #eff6ff; border-left: 4px solid #3b82f6; padding: 15px; margin-bottom: 20px; border-radius: 4px; font-size: 1.1em; }
+    .alert-banner { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; margin-bottom: 20px; border-radius: 4px; color: #92400e; display: none; }
+    .form-group { margin-bottom: 20px; }
+    label { display: block; margin-bottom: 5px; font-weight: bold; color: #1e293b; }
+    .comment { font-size: 0.85em; color: #64748b; margin-bottom: 8px; font-style: italic; }
+    input[type="text"], input[type="number"], select { width: 100%; padding: 10px; box-sizing: border-box; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 1em; }
+    input[readonly] { background-color: #f1f5f9; color: #475569; cursor: not-allowed; }
+    .radio-group { display: flex; gap: 20px; margin-top: 5px; }
+    .radio-group label { font-weight: normal; cursor: pointer; display: flex; align-items: center; gap: 5px; }
+    .conditional-section { background: #f8fafc; border: 1px dashed #cbd5e1; padding: 20px; border-radius: 6px; margin-top: 15px; display: none; }
+    .btn-container { display: flex; gap: 10px; margin-top: 30px; }
+    button { background: #2563eb; color: white; padding: 12px 20px; border: none; border-radius: 6px; cursor: pointer; font-size: 1em; font-weight: bold; flex: 1; }
+    button:hover { background: #1d4ed8; }
+    button.secondary { background: #64748b; }
+    button.secondary:hover { background: #475569; }
+    button.success { background: #16a34a; }
+    button.success:hover { background: #15803d; }
+    button.warning { background: #d97706; }
+    button.warning:hover { background: #b45309; }
+    .message { margin-top: 15px; padding: 15px; border-radius: 6px; display: none; }
+    .success-msg { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+    .error-msg { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+    .review-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+    .review-table th, .review-table td { border: 1px solid #cbd5e1; padding: 8px 12px; text-align: left; font-size: 0.95em; }
+    .review-table th { background: #f1f5f9; color: #334155; }
+  </style>
+
+
+
+  <div class="card">
+    <h2>Enquête Effectifs Élèves</h2>
+    
+    <!-- En-tête Établissement -->
+    <div id="etab-container" class="etab-info">
+      Chargement des informations de l'établissement...
+    </div>
+
+    <!-- Bannières d'avertissement modification -->
+    <div id="existing-data-banner" class="alert-banner">
+      <strong>Attention :</strong> Des effectifs ont déjà été validés pour cet exercice.
+      <p style="margin: 10px 0 5px 0;">Voulez-vous modifier les données existantes ?</p>
+      <div class="btn-container" style="margin-top: 10px;">
+        <button type="button" class="warning" onclick="autoriserModification()">Oui, modifier les données</button>
+      </div>
+    </div>
+
+    <!-- Formulaire principal de saisie -->
+    <form id="form-collecte" style="display: none;">
+      
+      <!-- Bloc Année Scolaire -->
+      <div class="form-group">
+        <label for="EFFECTIF_anneescolaire">Année scolaire</label>
+        <div class="comment">Champ non modifiable prérempli à partir du lien internet communiqué sur le format « aaaa-aaaa »</div>
+        <input type="text" id="EFFECTIF_anneescolaire" readonly="">
+      </div>
+
+      <h3>1. École (Maternelle / Élémentaire)</h3>
+      <div class="form-group">
+        <label>Votre établissement a-t-il une école ?</label>
+        <div class="radio-group">
+          <label><input type="radio" name="has_ecole" id="ecole_oui" value="oui" onclick="toggleSection('ecole-section', true)"> Oui</label>
+          <label><input type="radio" name="has_ecole" id="ecole_non" value="non" onclick="toggleSection('ecole-section', false)" checked=""> Non</label>
+        </div>
+      </div>
+      <div id="ecole-section" class="conditional-section">
+        <div class="form-group">
+          <label for="EFFECTIF_maternelle">Effectif en classe maternelle</label>
+          <input type="number" id="EFFECTIF_maternelle" value="0">
+        </div>
+        <div class="form-group">
+          <label for="EFFECTIF_elementaire">Effectif en classe élémentaire</label>
+          <input type="number" id="EFFECTIF_elementaire" value="0">
+        </div>
+      </div>
+
+      <h3>2. Collège</h3>
+      <div class="form-group">
+        <label>Votre établissement a-t-il un collège ?</label>
+        <div class="radio-group">
+          <label><input type="radio" name="has_college" id="college_oui" value="oui" onclick="toggleSection('college-section', true)"> Oui</label>
+          <label><input type="radio" name="has_college" id="college_non" value="non" onclick="toggleSection('college-section', false)" checked=""> Non</label>
+        </div>
+      </div>
+      <div id="college-section" class="conditional-section">
+        <div class="form-group">
+          <label for="EFFECTIF_college">Effectif en classe de collège</label>
+          <input type="number" id="EFFECTIF_college" value="0">
+        </div>
+      </div>
+
+      <h3>3. Lycée Général et Technologique</h3>
+      <div class="form-group">
+        <label>Votre établissement a-t-il un lycée général et technologique ?</label>
+        <div class="radio-group">
+          <label><input type="radio" name="has_lyceegt" id="lyceegt_oui" value="oui" onclick="toggleSection('lyceegt-section', true)"> Oui</label>
+          <label><input type="radio" name="has_lyceegt" id="lyceegt_non" value="non" onclick="toggleSection('lyceegt-section', false)" checked=""> Non</label>
+        </div>
+      </div>
+      <div id="lyceegt-section" class="conditional-section">
+        <div class="form-group">
+          <label for="EFFECTIF_lyceegeneral et technologique">Effectif en classe de lycée général et technologique</label>
+          <input type="number" id="EFFECTIF_lyceegeneral et technologique" value="0">
+        </div>
+      </div>
+
+      <h3>4. Lycée Professionnel</h3>
+      <div class="form-group">
+        <label>Votre établissement a-t-il un lycée professionnel ?</label>
+        <div class="radio-group">
+          <label><input type="radio" name="has_lyceepro" id="lyceepro_oui" value="oui" onclick="toggleSection('lyceepro-section', true)"> Oui</label>
+          <label><input type="radio" name="has_lyceepro" id="lyceepro_non" value="non" onclick="toggleSection('lyceepro-section', false)" checked=""> Non</label>
+        </div>
+      </div>
+      <div id="lyceepro-section" class="conditional-section">
+        <div class="form-group">
+          <label for="EFFECTIF_lyceeprofessionnel">Effectif en classe de lycée professionnel</label>
+          <input type="number" id="EFFECTIF_lyceeprofessionnel" value="0">
+        </div>
+      </div>
+
+      <h3>5. BTS ou Prépas (Formation initiale voie scolaire)</h3>
+      <div class="form-group">
+        <label>Votre établissement a-t-il une ou des section BTS ou prépa en formation initiale voie scolaire ?</label>
+        <div class="radio-group">
+          <label><input type="radio" name="has_btsprepa" id="btsprepa_oui" value="oui" onclick="toggleSection('btsprepa-section', true)"> Oui</label>
+          <label><input type="radio" name="has_btsprepa" id="btsprepa_non" value="non" onclick="toggleSection('btsprepa-section', false)" checked=""> Non</label>
+        </div>
+      </div>
+      <div id="btsprepa-section" class="conditional-section">
+        <div class="form-group">
+          <label for="EFFECTIF_btsprepa">Effectif en classe de BTS ou prépa voie scolaire</label>
+          <input type="number" id="EFFECTIF_btsprepa" value="0">
+        </div>
+      </div>
+
+      <h3>6. CFA, UFA ou CFC (Formation continue / Apprentissage)</h3>
+      <div class="form-group">
+        <label>Votre établissement a-t-il un CFA, une UFA ou un CFC ?</label>
+        <div class="radio-group">
+          <label><input type="radio" name="has_fcfa" id="fcfa_oui" value="oui" onclick="toggleSection('fcfa-section', true)"> Oui</label>
+          <label><input type="radio" name="has_fcfa" id="fcfa_non" value="non" onclick="toggleSection('fcfa-section', false)" checked=""> Non</label>
+        </div>
+      </div>
+      <div id="fcfa-section" class="conditional-section">
+        <div class="form-group">
+          <label for="EFFECTIF_fcfa">Effectif de la formation continue ou de l’apprentissage</label>
+          <input type="number" id="EFFECTIF_fcfa" value="0">
+        </div>
+      </div>
+
+      <div class="btn-container">
+        <button type="button" onclick="preparerValidation()">Vérifier ma saisie et valider</button>
+      </div>
+    </form>
+
+    <!-- Étape de relecture / validation finale -->
+    <div id="review-container" style="display: none;">
+      <h3>Récapitulatif de votre saisie</h3>
+      <p>Veuillez vérifier vos données avant l'enregistrement final.</p>
+      <div id="review-content"></div>
+      
+      <div class="btn-container">
+        <button type="button" class="secondary" onclick="modifierSaisie()">Modifier la saisie</button>
+        <button type="button" class="success" id="btn-final-submit" onclick="enregistrerDonnees()">Confirmer et enregistrer</button>
+      </div>
+    </div>
+
+    <div id="feedback" class="message"></div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://ugrmpawukiyiutjufizb.supabase.co'; 
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVncm1wYXd1a2l5aXV0anVmaXpiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgxODE1MDMsImV4cCI6MjEwMzc1NzUwM30.XhxxvEoEhYlvh-rekBXhAREUtYuljwES2fAyM7TwJvo';
+    
+    let supabaseClient;
+    try {
+      supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    } catch(e) { console.error("Erreur d'initialisation Supabase", e); }
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const etabId = urlParams.get('EFFECTIF_etab') || urlParams.get('ETAB_id') || urlParams.get('id');
+    const exerciceParam = urlParams.get('exercice') || '2025-2026';
+
+    let isModificationMode = false;
+
+    // Dictionnaire des libellés conviviaux pour l'étape de relecture
+    const labelsDict = {
+      EFFECTIF_anneescolaire: "Année scolaire",
+      EFFECTIF_maternelle: "Effectif en classe maternelle",
+      EFFECTIF_elementaire: "Effectif en classe élémentaire",
+      EFFECTIF_college: "Effectif en classe de collège",
+      "EFFECTIF_lyceegeneral et technologique": "Effectif en classe de lycée général et technologique",
+      EFFECTIF_lyceeprofessionnel: "Effectif en classe de lycée professionnel",
+      EFFECTIF_btsprepa: "Effectif en classe de BTS ou prépa voie scolaire",
+      EFFECTIF_fcfa: "Effectif de la formation continue ou de l’apprentissage"
+    };
+
+    async function initialiserFormulaire() {
+      if (!etabId) {
+        document.getElementById('etab-container').innerHTML = '<strong>Erreur :</strong> Aucun identifiant d’établissement (EFFECTIF_etab) spécifié dans l’URL.';
+        return;
+      }
+
+      document.getElementById('EFFECTIF_anneescolaire').value = exerciceParam;
+
+      // 1. Récupération des infos de l'établissement
+      const { data: etabData, error: etabError } = await supabaseClient
+        .from('T_ETABLISSEMENT')
+        .select('ETAB_nom, ETAB_ville')
+        .eq('ETAB_id', etabId)
+        .single();
+
+      if (etabError || !etabData) {
+        document.getElementById('etab-container').innerHTML = '<strong>Erreur :</strong> Établissement introuvable dans la base.';
+        return;
+      } else {
+        document.getElementById('etab-container').innerHTML = `<strong>Établissement :</strong> ${etabData.ETAB_nom} — <strong>Ville :</strong> ${etabData.ETAB_ville}`;
+      }
+
+      // 2. Vérification si des effectifs existent DÉJÀ pour cet établissement et cette année scolaire
+      const { data: effData, error: effError } = await supabaseClient
+        .from('T_EFFECTIF')
+        .select('*')
+        .eq('EFFECTIF_etab', etabId)
+        .eq('EFFECTIF_anneescolaire', exerciceParam)
+        .maybeSingle();
+
+      if (effData) {
+        document.getElementById('existing-data-banner').style.display = 'block';
+        preRemplirFormulaire(effData);
+      } else {
+        document.getElementById('form-collecte').style.display = 'block';
+      }
+    }
+
+    initialiserFormulaire();
+
+    function autoriserModification() {
+      isModificationMode = true;
+      document.getElementById('existing-data-banner').style.display = 'none';
+      document.getElementById('form-collecte').style.display = 'block';
+    }
+
+    function preRemplirFormulaire(data) {
+      const fields = [
+        'EFFECTIF_maternelle', 'EFFECTIF_elementaire', 'EFFECTIF_college',
+        'EFFECTIF_lyceegeneral et technologique', 'EFFECTIF_lyceeprofessionnel',
+        'EFFECTIF_btsprepa', 'EFFECTIF_fcfa'
+      ];
+
+      fields.forEach(f => {
+        if (data[f] !== undefined && data[f] !== null) {
+          const el = document.getElementById(f);
+          if (el) el.value = data[f];
+        }
+      });
+
+      // Gestion de l'affichage des sections en fonction des valeurs enregistrées
+      if ((data.EFFECTIF_maternelle || 0) > 0 || (data.EFFECTIF_elementaire || 0) > 0) {
+        document.getElementById('ecole_oui').checked = true;
+        toggleSection('ecole-section', true);
+      }
+      if ((data.EFFECTIF_college || 0) > 0) {
+        document.getElementById('college_oui').checked = true;
+        toggleSection('college-section', true);
+      }
+      if ((data["EFFECTIF_lyceegeneral et technologique"] || 0) > 0) {
+        document.getElementById('lyceegt_oui').checked = true;
+        toggleSection('lyceegt-section', true);
+      }
+      if ((data.EFFECTIF_lyceeprofessionnel || 0) > 0) {
+        document.getElementById('lyceepro_oui').checked = true;
+        toggleSection('lyceepro-section', true);
+      }
+      if ((data.EFFECTIF_btsprepa || 0) > 0) {
+        document.getElementById('btsprepa_oui').checked = true;
+        toggleSection('btsprepa-section', true);
+      }
+      if ((data.EFFECTIF_fcfa || 0) > 0) {
+        document.getElementById('fcfa_oui').checked = true;
+        toggleSection('fcfa-section', true);
+      }
+    }
+
+    function toggleSection(sectionId, show) {
+      document.getElementById(sectionId).style.display = show ? 'block' : 'none';
+      if (!show) {
+        // Remet à zéro les champs de la section si l'utilisateur répond "Non"
+        const inputs = document.getElementById(sectionId).querySelectorAll('input[type="number"]');
+        inputs.forEach(input => input.value = 0);
+      }
+    }
+
+    let formDataCache = {};
+
+    function preparerValidation() {
+      const form = document.getElementById('form-collecte');
+      if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+      }
+
+      formDataCache = {
+        EFFECTIF_etab: etabId,
+        EFFECTIF_anneescolaire: document.getElementById('EFFECTIF_anneescolaire').value,
+        EFFECTIF_maternelle: document.querySelector('input[name="has_ecole"]:checked').value === 'oui' ? parseInt(document.getElementById('EFFECTIF_maternelle').value) || 0 : 0,
+        EFFECTIF_elementaire: document.querySelector('input[name="has_ecole"]:checked').value === 'oui' ? parseInt(document.getElementById('EFFECTIF_elementaire').value) || 0 : 0,
+        EFFECTIF_college: document.querySelector('input[name="has_college"]:checked').value === 'oui' ? parseInt(document.getElementById('EFFECTIF_college').value) || 0 : 0,
+        "EFFECTIF_lyceegeneral et technologique": document.querySelector('input[name="has_lyceegt"]:checked').value === 'oui' ? parseInt(document.getElementById('EFFECTIF_lyceegeneral et technologique').value) || 0 : 0,
+        EFFECTIF_lyceeprofessionnel: document.querySelector('input[name="has_lyceepro"]:checked').value === 'oui' ? parseInt(document.getElementById('EFFECTIF_lyceeprofessionnel').value) || 0 : 0,
+        EFFECTIF_btsprepa: document.querySelector('input[name="has_btsprepa"]:checked').value === 'oui' ? parseInt(document.getElementById('EFFECTIF_btsprepa').value) || 0 : 0,
+        EFFECTIF_fcfa: document.querySelector('input[name="has_fcfa"]:checked').value === 'oui' ? parseInt(document.getElementById('EFFECTIF_fcfa').value) || 0 : 0
+      };
+
+      // Construction du tableau de relecture avec les libellés conviviaux
+      let htmlReview = `<table class="review-table"><tr><th>Indicateur / Niveau</th><th>Effectif</th></tr>`;
+      for (const [key, val] of Object.entries(formDataCache)) {
+        if (key === 'EFFECTIF_etab') continue; // Masque l'ID technique
+        const label = labelsDict[key] || key;
+        htmlReview += `<tr><td><b>${label}</b></td><td>${val}</td></tr>`;
+      }
+      htmlReview += `</table>`;
+
+      document.getElementById('review-content').innerHTML = htmlReview;
+      document.getElementById('form-collecte').style.display = 'none';
+      document.getElementById('review-container').style.display = 'block';
+    }
+
+    function modifierSaisie() {
+      document.getElementById('review-container').style.display = 'none';
+      document.getElementById('form-collecte').style.display = 'block';
+    }
+
+    async function enregistrerDonnees() {
+      const btn = document.getElementById('btn-final-submit');
+      btn.disabled = true;
+      btn.innerText = 'Enregistrement en cours...';
+      const feedback = document.getElementById('feedback');
+
+      // 1. Suppression de l'ancienne saisie dans T_EFFECTIF uniquement au moment de la validation finale
+      const { error: errDelete } = await supabaseClient
+        .from('T_EFFECTIF')
+        .delete()
+        .eq('EFFECTIF_etab', etabId)
+        .eq('EFFECTIF_anneescolaire', exerciceParam);
+
+      if (errDelete) {
+        feedback.style.display = 'block';
+        feedback.className = 'message error-msg';
+        feedback.innerText = 'Erreur lors du nettoyage de l’ancienne saisie : ' + errDelete.message;
+        btn.disabled = false;
+        btn.innerText = 'Confirmer et enregistrer';
+        return;
+      }
+
+      // 2. Insertion de la nouvelle saisie fraîchement validée
+      const { error: errInsert } = await supabaseClient
+        .from('T_EFFECTIF')
+        .insert([formDataCache]);
+
+      if (errInsert) {
+        feedback.style.display = 'block';
+        feedback.className = 'message error-msg';
+        feedback.innerText = 'Erreur lors de l’enregistrement : ' + errInsert.message;
+        btn.disabled = false;
+        btn.innerText = 'Confirmer et enregistrer';
+        return;
+      }
+
+      feedback.style.display = 'block';
+      feedback.className = 'message success-msg';
+      feedback.innerText = 'Vos effectifs élèves ont été validés et enregistrés avec succès dans la base. Merci !';
+      document.getElementById('review-container').style.display = 'none';
+    }
+  </script>
